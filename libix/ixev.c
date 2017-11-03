@@ -198,12 +198,17 @@ static void ixev_timer_event(unsigned long cookie)
 	t->handler(t->arg);
 }
 
+static void ixev_udp_recv(void * addr, size_t len, struct ip_tuple *id) {
+	ix_udp_recv_done(addr);
+}
+
 static struct ix_ops ixev_ops = {
 	.tcp_connected	= ixev_tcp_connected,
 	.tcp_knock	= ixev_tcp_knock,
 	.tcp_dead	= ixev_tcp_dead,
 	.tcp_recv	= ixev_tcp_recv,
 	.tcp_sent	= ixev_tcp_sent,
+	.udp_recv	= ixev_udp_recv,
 	.timer_event	= ixev_timer_event,
 };
 
@@ -644,7 +649,8 @@ int ixev_init(struct ixev_conn_ops *ops)
 	if (ret)
 		return ret;
 
-	ixev_global_ops = *ops;
+	if (ops)
+		ixev_global_ops = *ops;
 	return 0;
 }
 

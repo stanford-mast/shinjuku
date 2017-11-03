@@ -26,6 +26,8 @@
  */
 
 #include <stdio.h>
+#include <time.h>
+#include <inttypes.h>
 
 #include <ix/stddef.h>
 #include <ix/byteorder.h>
@@ -113,6 +115,11 @@ out:
 	mbuf_free(pkt);
 }
 
+static struct eth_ctx measure_ctx = {
+    .received_total = 0,
+    .packets_total = 0,
+};
+
 /**
  * eth_input - process an ethernet packet
  * @pkt: the mbuf containing the packet
@@ -121,6 +128,7 @@ void eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt)
 {
 	struct eth_hdr *ethhdr = mbuf_mtod(pkt, struct eth_hdr *);
 	struct eth_fg *fg;
+	struct timespec now;
 
 	//set_current_queue(rx_queue);
 	fg = fgs[pkt->fg_id];
@@ -128,6 +136,18 @@ void eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt)
 
 	log_debug("ip: got ethernet packet of len %ld, type %x\n",
 		  pkt->len, ntoh16(ethhdr->type));
+
+	measure_ctx.received_total += pkt->len;
+	measure_ctx.packets_total += 1;
+	if (measure_ctx.received_total > 1000000000) {
+	    measure_ctx.received_total = 0;
+	    clock_gettime(CLOCK_MONOTONIC, &now);
+	    printf("Time %lu sec, %ld nsec\n",
+		    now.tv_sec - measure_ctx.prev.tv_sec,
+		    now.tv_nsec - measure_ctx.prev.tv_nsec);
+	    measure_ctx.prev.tv_sec = now.tv_sec;
+	    measure_ctx.prev.tv_nsec = now.tv_nsec;
+	}
 
 	if (ethhdr->type == hton16(ETHTYPE_IP))
 		ip_input(fg, pkt, mbuf_nextd(ethhdr, struct ip_hdr *));

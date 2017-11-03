@@ -54,6 +54,12 @@ extern void tcp_input_tmp(struct eth_fg *, struct mbuf *pkt, struct ip_hdr *iphd
 extern int tcp_api_init(void);
 extern int tcp_api_init_fg(void);
 
+struct eth_ctx {
+	uint64_t received_total;
+	uint64_t packets_total;
+	struct timespec prev;
+};
+
 /**
  * ip_setup_header - outputs a typical IP header
  * @iphdr: a pointer to the header
