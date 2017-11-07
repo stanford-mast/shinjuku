@@ -139,8 +139,8 @@ void eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt)
 
 	measure_ctx.received_total += pkt->len;
 	measure_ctx.packets_total += 1;
-	if (measure_ctx.received_total > 1000000000) {
-	    measure_ctx.received_total = 0;
+	if (measure_ctx.packets_total > 100000000) {
+	    measure_ctx.packets_total = 0;
 	    clock_gettime(CLOCK_MONOTONIC, &now);
 	    printf("Time %lu sec, %ld nsec\n",
 		    now.tv_sec - measure_ctx.prev.tv_sec,

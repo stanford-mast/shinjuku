@@ -29,7 +29,9 @@
 #include <mempool.h>
 #include <stdio.h>
 #include <errno.h>
+#include <sys/types.h>
 
+#include "ix.h"
 #include "ixev.h"
 #include "buf.h"
 #include "ixev_timer.h"
@@ -44,6 +46,13 @@ static struct ixev_conn_ops ixev_global_ops;
 
 static struct mempool_datastore ixev_buf_datastore;
 __thread struct mempool ixev_buf_pool;
+
+static uint64_t getCurNs() {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    uint64_t t = ts.tv_sec*1000*1000*1000 + ts.tv_nsec;
+    return t;
+}
 
 static inline void __ixev_check_generation(struct ixev_ctx *ctx)
 {
@@ -198,8 +207,50 @@ static void ixev_timer_event(unsigned long cookie)
 	t->handler(t->arg);
 }
 
-static void ixev_udp_recv(void * addr, size_t len, struct ip_tuple *id) {
+static uint64_t get_wait_time() {
+	double ran = (double)rand() / (double)RAND_MAX;
+	if (ran < 0.91) {
+	    return (uint64_t) 20000;
+	} else {
+	    return (uint64_t) 200000;
+	}
+}
+
+static void ixev_udp_recv(void * addr, size_t len, struct ip_tuple *id)
+{
+	if (id->dst_port != 1234) {
+	    ix_udp_recv_done(addr);
+	    return;
+	}
+	struct request * req = (struct request *) addr;
+	struct response_ip_tuple * resp_ip = mempool_alloc(&response_pool);
+	if (resp_ip == NULL) {
+		printf("Could not allocate resp\n");
+		ix_udp_recv_done(addr);
+		return;
+	}
+	uint64_t work_time = get_wait_time();
+	if (work_time == 20000) {
+		resp_ip->resp.id = 0;
+	} else {
+		resp_ip->resp.id = 1;
+	}
+	resp_ip->resp.genNs = req->genNs;
+	resp_ip->ip.src_ip = id->dst_ip;
+	resp_ip->ip.dst_ip = id->src_ip;
+	resp_ip->ip.src_port = id->dst_port;
+	resp_ip->ip.dst_port = id->src_port;
 	ix_udp_recv_done(addr);
+
+	uint64_t finiNs = getCurNs() + work_time;
+	while (getCurNs() < finiNs);
+	ix_udp_send((void *) &resp_ip->resp, sizeof(struct response),
+		    &resp_ip->ip, (unsigned long) resp_ip);
+}
+
+static void ixev_udp_sent(unsigned long cookie) {
+	struct response_ip_tuple * resp = (struct response_ip_tuple *) cookie;
+	mempool_free(&response_pool, resp);
 }
 
 static struct ix_ops ixev_ops = {
@@ -209,6 +260,7 @@ static struct ix_ops ixev_ops = {
 	.tcp_recv	= ixev_tcp_recv,
 	.tcp_sent	= ixev_tcp_sent,
 	.udp_recv	= ixev_udp_recv,
+	.udp_sent	= ixev_udp_sent,
 	.timer_event	= ixev_timer_event,
 };
 

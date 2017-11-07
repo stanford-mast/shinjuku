@@ -27,7 +27,27 @@
 
 #pragma once
 
+#include <stdint.h>
 #include "syscall.h"
+#include <mempool.h>
+
+struct request {
+	uint64_t id;
+	uint64_t genNs;
+};
+
+struct response {
+	uint64_t id;
+	uint64_t genNs;
+};
+
+struct response_ip_tuple {
+	struct response resp;
+	struct ip_tuple ip;
+};
+
+struct mempool_datastore response_datastore;
+struct mempool response_pool;
 
 struct ix_ops {
 	void (*udp_recv)(void *addr, size_t len, struct ip_tuple *id);

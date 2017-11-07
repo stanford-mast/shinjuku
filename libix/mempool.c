@@ -102,11 +102,12 @@ void mempool_free_2(struct mempool *m, void *ptr)
 
 
 /**
- * mempool_init_buf_with_pages - creates the object and puts them in the doubly-linked list
+ * mempool_init_buf_with_pages - creates the object and puts them in the
+ * doubly-linked list
  * @m: datastore
- *
  */
-int mempool_init_buf_with_pages(struct mempool_datastore *mds, int elems_per_page, int nr_pages,
+int mempool_init_buf_with_pages(struct mempool_datastore *mds,
+				int elems_per_page, int nr_pages,
 				size_t elem_len)
 {
 	int i, j, chunk_count = 0;
@@ -114,7 +115,8 @@ int mempool_init_buf_with_pages(struct mempool_datastore *mds, int elems_per_pag
 
 	for (i = 0; i < nr_pages; i++) {
 		cur = (struct mempool_hdr *)
-		      ((uintptr_t) mds->buf + i * PGSIZE_2MB + MEMPOOL_INITIAL_OFFSET);
+		      ((uintptr_t) mds->buf + i * PGSIZE_2MB + \
+		       MEMPOOL_INITIAL_OFFSET);
 		for (j = 0; j < elems_per_page; j++) {
 			if (prev == NULL)
 				head = cur;
@@ -157,12 +159,15 @@ int mempool_init_buf_with_pages(struct mempool_datastore *mds, int elems_per_pag
  * but possibily more depending on page alignment.
  *
  * There should be one datastore per C data type (in general).
- * Each core, flow-group or unit of concurrency will create a distinct mempool leveraging the datastore
+ * Each core, flow-group or unit of concurrency will create a distinct mempool
+ * leveraging the datastore.
  *
  * Returns 0 if successful, otherwise fail.
  */
 
-int mempool_create_datastore(struct mempool_datastore *mds, int nr_elems, size_t elem_len, int nostraddle, int chunk_size, const char *name)
+int mempool_create_datastore(struct mempool_datastore *mds, int nr_elems,
+			     size_t elem_len, int nostraddle, int chunk_size,
+			     const char *name)
 {
 	int nr_pages;
 
