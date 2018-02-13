@@ -87,6 +87,7 @@ void do_work(void)
     worker_responses[0].flag = FINISHED;
     while (1) {
         while (dispatcher_requests[0].flag == WAITING);
+        worker_responses[0].cont = NULL;
         dispatcher_requests[0].flag = WAITING;
         //log_info("do_work: Got dispatcher work\n");
         dispatcher_requests[0].cont->uc_link = &uctx_main;

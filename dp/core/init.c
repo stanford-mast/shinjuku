@@ -48,6 +48,8 @@
 #include <ix/context.h>
 #include <ix/delegation.h>
 
+#include <asm/cpu.h>
+
 #include <net/ip.h>
 
 #include <dune.h>
@@ -84,6 +86,8 @@ extern int dpdk_init(void);
 extern void do_work(void);
 extern int context_init(void);
 extern int context_init_mempool(void);
+extern void rand_init(void);
+extern double rand_expo(double lambda);
 
 extern struct mempool context_pool;
 extern struct mempool stack_pool;
@@ -543,34 +547,52 @@ int main(int argc, char *argv[])
     }
     log_info("init done\n");
 
-    // Waiting for one context to be executed so that both dispatcher and worker
-    // are ready.
+    // Waiting for one context to be executed so that both dispatcher and
+    // worker are ready.
+
     while (worker_responses[0].flag == RUNNING);
     worker_responses[0].flag = RUNNING;
     dispatcher_requests[0].cont = context_alloc(&context_pool, &stack_pool);
     dispatcher_requests[0].flag = ACTIVE;
-
+    /*
     while (worker_responses[0].flag == RUNNING);
     context_free(worker_responses[0].cont, &context_pool, &stack_pool);
+    */
 
-    clock_gettime(CLOCK_MONOTONIC, &start);
+    uint64_t foo[100000];
+    //clock_gettime(CLOCK_MONOTONIC, &start);
     for (i = 0; i < 100000; i++) {
+        cpu_serialize();
+        start64 = rdtsc();
+
+        // Measure context allocation, dispatching, execution, and finish time.
         while (worker_responses[0].flag == RUNNING);
+        context_free(worker_responses[0].cont, &context_pool, &stack_pool);
         //log_info("main: received request from worker_core\n");
         worker_responses[0].flag = RUNNING;
         dispatcher_requests[0].cont = context_alloc(&context_pool, &stack_pool);
         dispatcher_requests[0].flag = ACTIVE;
         //log_info("main: sent context to worker core\n");
 
-        while (worker_responses[0].flag == RUNNING);
-        //log_info("main: received finished context from worker core\n");
-        context_free(worker_responses[0].cont, &context_pool, &stack_pool);
+        // Measure context allocation and free time.
+        /*
+        dispatcher_requests[0].cont = context_alloc(&context_pool, &stack_pool);
+        context_free(dispatcher_requests[0].cont, &context_pool, &stack_pool);
+        */
+
+        end64 = rdtscp(NULL);
+        foo[i] = (end64 - start64) / 2.8;
+        //log_info("main: context full time: %lu ns\n",
+        //     (end64 - start64) / 2.8);
     }
-    clock_gettime(CLOCK_MONOTONIC, &end);
-    start64 = 10e9 * start.tv_sec + start.tv_nsec;
-    end64 = 10e9 * end.tv_sec + end.tv_nsec;
-    log_info("main: average context allocation time: %lu ns\n",
-             (end64 - start64) / 100000);
+    //clock_gettime(CLOCK_MONOTONIC, &end);
+    //start64 = 10e9 * start.tv_sec + start.tv_nsec;
+    //end64 = 10e9 * end.tv_sec + end.tv_nsec;
+    //log_info("main: average context allocation time: %lu ns\n",
+    //        (end64 - start64) / 100000);
+    for (i = 0; i < 100000; i++) {
+        printf("%lu\n", foo[i]);
+    }
     /*
     log_info("main: starting benchmarking...\n");
     clock_gettime(CLOCK_MONOTONIC, &start);

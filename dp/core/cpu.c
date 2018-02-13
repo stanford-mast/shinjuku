@@ -170,6 +170,14 @@ int cpu_init_one(unsigned int cpu)
 	if (ret)
 		return -EPERM;
 
+    struct sched_param params;
+    params.sched_priority = 99;
+    ret = sched_setscheduler(0, SCHED_FIFO, &params);
+    if (ret) {
+        log_err("cpu: failed to set FIFO scheduling policy\n");
+        return ret;
+    }
+
 	ret = syscall(SYS_getcpu, &tmp, &numa_node, NULL);
 	if (ret)
 		return -ENOSYS;
