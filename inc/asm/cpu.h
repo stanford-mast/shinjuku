@@ -53,7 +53,7 @@
 #define cpu_relax() asm volatile("pause")
 
 #define cpu_serialize() \
-	asm volatile("cpuid" : : : "%rax", "%rbx", "%rcx", "%rdx")
+	asm volatile("mfence" : : :)
 
 static inline unsigned long rdtsc(void)
 {
