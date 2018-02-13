@@ -83,7 +83,9 @@ ix: $(DEPENDENCY) $(OBJS) $(DUNE_LIB) ix.ld
 	$(LD) $(LDFLAGS) -o ix $(OBJS) $(DUNE_LIB) $(DPDK_LIBS) $(LDLIBS)
 
 clean:
+	cp core/context_fast.S /tmp/context_fast.S
 	rm -f $(OBJS) ix .depend
+	cp /tmp/context_fast.S core/context_fast.S
 
 dist-clean: clean
 	rm *~

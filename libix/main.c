@@ -128,6 +128,7 @@ int ix_init(struct ix_ops *ops, int batch_depth)
 	if (!karr)
 		return -ENOMEM;
 
+    /*
 	int ret = mempool_create_datastore(&response_datastore, 128000,
 					   sizeof(struct response_ip_tuple), 0,
 					   MEMPOOL_DEFAULT_CHUNKSIZE,
@@ -141,7 +142,7 @@ int ix_init(struct ix_ops *ops, int batch_depth)
 	if (ret) {
 	    fprintf(stderr, "unable to to create mempool 2\n");
 	    return ret;
-	}
+	}*/
 
 	karr->len = 0;
 	karr->max_len = batch_depth;

@@ -45,12 +45,20 @@
 #include <ix/control_plane.h>
 #include <ix/log.h>
 #include <ix/drivers.h>
+#include <ix/context.h>
+#include <ix/delegation.h>
 
 #include <net/ip.h>
 
 #include <dune.h>
 
 #include <lwip/memp.h>
+
+//FIXME Remove these
+#include <sys/types.h>
+#include <sys/resource.h>
+#include <ucontext.h>
+#include <time.h>
 
 #define MSR_RAPL_POWER_UNIT 1542
 #define ENERGY_UNIT_MASK 0x1F00
@@ -73,7 +81,12 @@ extern int cp_init(void);
 extern int mempool_init(void);
 extern int init_migration_cpu(void);
 extern int dpdk_init(void);
+extern void do_work(void);
+extern int context_init(void);
+extern int context_init_mempool(void);
 
+extern struct mempool context_pool;
+extern struct mempool stack_pool;
 
 struct init_vector_t {
 	const char *name;
@@ -93,6 +106,7 @@ static struct init_vector_t init_tbl[] = {
 	{ "dpdk",    dpdk_init,    NULL, NULL},
 	{ "firstcpu", init_firstcpu, NULL, NULL},             // after cfg
 	{ "mbuf",    mbuf_init,    mbuf_init_cpu, NULL},      // after firstcpu
+	{ "context", context_init, NULL, NULL},      // after firstcpu
 	{ "memp",    memp_init,    memp_init_cpu, NULL},
 	{ "tcpapi",  tcp_api_init, tcp_api_init_cpu, NULL},
 	{ "ethdev",  init_ethdev,  NULL, NULL},
@@ -247,14 +261,13 @@ static int init_create_cpu(unsigned int cpu, int first)
 	for (i = 0; init_tbl[i].name; i++)
 		if (init_tbl[i].fcpu) {
 			ret = init_tbl[i].fcpu();
-			log_info("init: module %-10s on %d: %s \n", init_tbl[i].name, percpu_get(cpu_id), (ret ? "FAILURE" : "SUCESS"));
+			log_info("init: module %-10s on %d: %s \n", init_tbl[i].name, percpu_get(cpu_id), (ret ? "FAILURE" : "SUCCESS"));
 			if (ret)
 				panic("could not initialize IX\n");
 		}
 
 
 	log_info("init: CPU %d ready\n", cpu);
-	printf("init:CPU %d ready\n", cpu);
 	return 0;
 }
 
@@ -384,7 +397,9 @@ void *start_cpu(void *arg)
 		exit(ret);
 	}
 
-	wait_for_spawn();
+    log_info("init: Just before do_work()\n");
+    do_work();
+	// wait_for_spawn();
 
 	return NULL;
 }
@@ -454,7 +469,7 @@ static int init_hw(void)
 		exit(ret);
 	}
 
-	log_info("init: barrier after al CPU initialization\n");
+	log_info("init: barrier after all CPU initialization\n");
 
 	return 0;
 }
@@ -496,6 +511,7 @@ static int init_firstcpu(void)
 		return ret;
 	}
 
+
 	msr_val = rdmsr(MSR_RAPL_POWER_UNIT);
 	value = (msr_val & ENERGY_UNIT_MASK) >> ENERGY_UNIT_OFFSET;
 	energy_unit = 1.0 / (1 << value);
@@ -506,6 +522,9 @@ static int init_firstcpu(void)
 int main(int argc, char *argv[])
 {
 	int ret, i;
+    ucontext_t uctx;
+    struct timespec start, end;
+    uint64_t start64, end64;
 
 	init_argc = argc;
 	init_argv = argv;
@@ -514,20 +533,67 @@ int main(int argc, char *argv[])
 
 	log_info("init: cpu phase\n");
 	for (i = 0; init_tbl[i].name; i++)
+    {
 		if (init_tbl[i].f) {
 			ret = init_tbl[i].f();
-			log_info("init: module %-10s %s\n", init_tbl[i].name, (ret ? "FAILURE" : "SUCESS"));
+			log_info("init: module %-10s %s\n", init_tbl[i].name, (ret ? "FAILURE" : "SUCCESS"));
 			if (ret)
 				panic("could not initialize IX\n");
-		}
+        }
+    }
+    log_info("init done\n");
 
+    // Waiting for one context to be executed so that both dispatcher and worker
+    // are ready.
+    while (worker_responses[0].flag == RUNNING);
+    worker_responses[0].flag = RUNNING;
+    dispatcher_requests[0].cont = context_alloc(&context_pool, &stack_pool);
+    dispatcher_requests[0].flag = ACTIVE;
+
+    while (worker_responses[0].flag == RUNNING);
+    context_free(worker_responses[0].cont, &context_pool, &stack_pool);
+
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (i = 0; i < 100000; i++) {
+        while (worker_responses[0].flag == RUNNING);
+        //log_info("main: received request from worker_core\n");
+        worker_responses[0].flag = RUNNING;
+        dispatcher_requests[0].cont = context_alloc(&context_pool, &stack_pool);
+        dispatcher_requests[0].flag = ACTIVE;
+        //log_info("main: sent context to worker core\n");
+
+        while (worker_responses[0].flag == RUNNING);
+        //log_info("main: received finished context from worker core\n");
+        context_free(worker_responses[0].cont, &context_pool, &stack_pool);
+    }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    start64 = 10e9 * start.tv_sec + start.tv_nsec;
+    end64 = 10e9 * end.tv_sec + end.tv_nsec;
+    log_info("main: average context allocation time: %lu ns\n",
+             (end64 - start64) / 100000);
+    /*
+    log_info("main: starting benchmarking...\n");
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (i = 0; i < 100000; i++) {
+        ucontext_t * cont = context_alloc(&context_pool, &stack_pool);
+        context_free(cont, &context_pool, &stack_pool);
+    }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+
+    start64 = 10e9 * start.tv_sec + start.tv_nsec;
+    end64 = 10e9 * end.tv_sec + end.tv_nsec;
+    log_info("main: average context allocation time: %lu ns\n",
+             (end64 - start64) / 100000);
+
+    //context_free(cont, &context_pool, &stack_pool);*/
+    log_info("finished handling contexts, looping forever...\n");
+    while(1);
 	ret = sandbox_init(argc - args_parsed, &argv[args_parsed]);
 	if (ret) {
 		log_err("init: failed to start sandbox\n");
 		return ret;
 	}
 
-	log_info("init done\n");
 	return 0;
 }
 

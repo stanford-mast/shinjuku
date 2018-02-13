@@ -358,7 +358,7 @@ int mempool_pagemem_map_to_user(struct mempool_datastore *m)
 {
 
 	m->iomap_addr = vm_map_to_user(m->buf, m->nr_pages,
-				       PGSIZE_2MB, VM_PERM_R);
+				       PGSIZE_2MB, VM_PERM_R | VM_PERM_W);
 	if (!m->iomap_addr)
 		return -ENOMEM;
 
