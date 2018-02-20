@@ -43,8 +43,9 @@
 #define EMA_SMOOTH_FACTOR EMA_SMOOTH_FACTOR_0
 
 DEFINE_PERCPU(int, eth_num_queues);
-DEFINE_PERCPU(struct eth_rx_queue *, eth_rxqs[NETHDEV]);
 DEFINE_PERCPU(struct eth_tx_queue *, eth_txqs[NETHDEV]);
+
+struct eth_rx_queue * eth_rxqs[NETHDEV];
 
 struct metrics_accumulator {
 	long timestamp;
@@ -107,7 +108,7 @@ int eth_process_recv(void)
 	do {
 		empty = true;
 		for (i = 0; i < percpu_get(eth_num_queues); i++) {
-			struct eth_rx_queue *rxq = percpu_get(eth_rxqs[i]);
+			struct eth_rx_queue *rxq = eth_rxqs[i];
 			if (!eth_process_recv_queue(rxq)) {
 				count++;
 				empty = false;
@@ -160,7 +161,7 @@ bool eth_rx_idle_wait(uint64_t usecs)
 	start = rdtsc();
 	do {
 		for (i = 0; i < percpu_get(eth_num_queues); i++) {
-			rxq = percpu_get(eth_rxqs[i]);
+			rxq = eth_rxqs[i];
 			if(rxq->ready(rxq))
 				return true;
 		}

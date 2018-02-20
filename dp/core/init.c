@@ -208,7 +208,7 @@ static int init_network_cpu(void)
 	ret = 0;
 	for (i = 0; i < eth_dev_count; i++) {
 		struct ix_rte_eth_dev *eth = eth_dev[i];
-		ret = eth_dev_get_rx_queue(eth, &percpu_get(eth_rxqs[i]));
+		ret = eth_dev_get_rx_queue(eth, &eth_rxqs[i]);
 		if (ret) {
 			return ret;
 		}

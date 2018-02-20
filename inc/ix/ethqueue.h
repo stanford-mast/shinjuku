@@ -40,7 +40,8 @@
 extern unsigned int eth_rx_max_batch;
 
 DECLARE_PERCPU(int, eth_num_queues);
-DECLARE_PERCPU(struct eth_rx_queue *, eth_rxqs[]);
+
+extern struct eth_rx_queue * eth_rxqs[];
 
 /*
  * Receive Queue API
@@ -87,7 +88,7 @@ static inline int eth_process_poll(void)
         struct eth_rx_queue *rxq;
 
         for (i = 0; i < percpu_get(eth_num_queues); i++) {
-                rxq = percpu_get(eth_rxqs[i]);
+                rxq = eth_rxqs[i];
                 count += eth_rx_poll(rxq);
         }
 
