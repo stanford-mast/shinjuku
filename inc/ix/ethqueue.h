@@ -36,12 +36,12 @@
 #define ETH_DEV_RX_QUEUE_SZ     512
 #define ETH_DEV_TX_QUEUE_SZ     4096
 #define ETH_RX_MAX_DEPTH	32768
-
-extern unsigned int eth_rx_max_batch;
+#define ETH_RX_MAX_BATCH        5
 
 DECLARE_PERCPU(int, eth_num_queues);
 
-extern struct eth_rx_queue * eth_rxqs[];
+struct eth_rx_queue * eth_rxqs[NETHDEV];
+
 
 /*
  * Receive Queue API
@@ -50,8 +50,8 @@ extern struct eth_rx_queue * eth_rxqs[];
 struct eth_rx_queue {
 	void *perqueue_offset;
 
-	struct mbuf *head; /* pointer to first recieved buffer */
-	struct mbuf *tail; /* pointer to last recieved buffer */
+	struct mbuf *head; /* pointer to first received buffer */
+	struct mbuf *tail; /* pointer to last received buffer */
 	int len;	   /* the total number of buffers */
 	int queue_idx;	   /* the queue index number */
 
@@ -93,6 +93,50 @@ static inline int eth_process_poll(void)
         }
 
         return count;
+}
+
+static inline int eth_process_recv_queue(struct eth_rx_queue *rxq)
+{
+        struct mbuf *pos = rxq->head;
+
+        if (!pos)
+                return -EAGAIN;
+
+        /* NOTE: pos could get freed after eth_input(), so check here */
+        rxq->head = pos->next;
+        rxq->len--;
+
+        eth_input(rxq, pos);
+
+        return 0;
+}
+
+/** eth_process_recv - retrieves pending received packets
+ *
+ * Returns true if there are are no remaining packets.
+ */
+static inline int eth_process_recv(void)
+{
+        int i, count = 0;
+        bool empty;
+
+        /*
+        * We round robin through each queue one packet at
+        * a time for fairness, and stop when all queues are
+        * empty or the batch limit is hit.
+        */
+        do {
+                empty = true;
+                for (i = 0; i < percpu_get(eth_num_queues); i++) {
+                        struct eth_rx_queue *rxq = eth_rxqs[i];
+                        if (!eth_process_recv_queue(rxq)) {
+                                count++;
+                                empty = false;
+                        }
+                }
+        } while (!empty && count < ETH_RX_MAX_BATCH);
+
+        return empty;
 }
 
 /**

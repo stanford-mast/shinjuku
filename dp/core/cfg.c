@@ -64,7 +64,6 @@ static int parse_gateway_addr(void);
 static int parse_arp(void);
 static int parse_devices(void);
 static int parse_cpu(void);
-static int parse_batch(void);
 static int parse_loader_path(void);
 
 struct config_vector_t {
@@ -299,17 +298,6 @@ static int parse_cpu(void)
 			return ret;
 		}
 	}
-	return 0;
-}
-
-static int parse_batch(void)
-{
-	int batch = -1;
-	config_lookup_int(&cfg, "batch", &batch);
-	if (!batch || batch <= 0) {
-		return -EINVAL;
-	}
-	eth_rx_max_batch = batch;
 	return 0;
 }
 
