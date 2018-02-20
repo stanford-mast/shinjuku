@@ -82,8 +82,8 @@ void icmp_input(struct eth_fg *cur_fg, struct mbuf *pkt, struct icmp_hdr *hdr, i
 	if (chksum_internet((void *) hdr, len))
 		goto out;
 
-	log_debug("icmp: got request type %d, code %d\n",
-		  hdr->type, hdr->code);
+	log_info("icmp: got request type %d, code %d\n",
+		 hdr->type, hdr->code);
 
 	switch (hdr->type) {
 	case ICMP_ECHO:

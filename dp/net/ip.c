@@ -66,6 +66,17 @@ static void ip_input(struct eth_fg *cur_fg, struct mbuf *pkt, struct ip_hdr *hdr
 {
 	int hdrlen, pktlen;
 
+        struct ip_addr addr;
+        char src[IP_ADDR_STR_LEN];
+        char dst[IP_ADDR_STR_LEN];
+
+        addr.addr = ntoh32(hdr->src_addr.addr);
+        ip_addr_to_str(&addr, src);
+        addr.addr = ntoh32(hdr->dst_addr.addr);
+        ip_addr_to_str(&addr, dst);
+
+        log_info("ip: got IP packet from '%s' to '%s'\n", src, dst);
+
 	/* check that the packet is long enough */
 	if (!mbuf_enough_space(pkt, hdr, sizeof(struct ip_hdr)))
 		goto out;
@@ -130,9 +141,10 @@ void eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt)
 	struct eth_fg *fg;
 	struct timespec now;
 
+        // No need for check fg here.
 	//set_current_queue(rx_queue);
-	fg = fgs[pkt->fg_id];
-	eth_fg_set_current(fg);
+	//fg = fgs[pkt->fg_id];
+	//eth_fg_set_current(fg);
 
 	log_debug("ip: got ethernet packet of len %ld, type %x\n",
 		  pkt->len, ntoh16(ethhdr->type));

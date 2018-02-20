@@ -35,6 +35,7 @@
 #include <ix/kstats.h>
 #include <ix/cfg.h>
 #include <ix/mempool.h>
+#include <ix/networker.h>
 #include <asm/chksum.h>
 
 #include <net/ip.h>
@@ -85,7 +86,9 @@ void udp_input(struct mbuf *pkt, struct ip_hdr *iphdr, struct udp_hdr *udphdr)
 	id->dst_port = ntoh16(udphdr->dst_port);
 	pkt->done = (void *) 0xDEADBEEF;
 
-	usys_udp_recv(mbuf_to_iomap(pkt, data), len, mbuf_to_iomap(pkt, id));
+        serve(data, len, id);
+        //FIXME We do not need to notify userspace here.
+	//usys_udp_recv(mbuf_to_iomap(pkt, data), len, mbuf_to_iomap(pkt, id));
 }
 
 static void udp_mbuf_done(struct mbuf *pkt)

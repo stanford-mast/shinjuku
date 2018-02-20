@@ -41,6 +41,7 @@
 
 #include <ix/cpu.h>
 #include <ix/log.h>
+#include <asm/cpu.h>
 #include <ix/context.h>
 #include <ix/delegation.h>
 
@@ -74,7 +75,7 @@ static ucontext_t * get_work(ucontext_t * fini_uctx)
     return fini_uctx;
 }
 
-void do_work(void)
+void do_work(int cpu_nr)
 {
     log_info("do_work: starting...\n");
     // FIXME Remove these after benchmarking finishes
@@ -83,27 +84,46 @@ void do_work(void)
     int i;
     int ret;
 
+    if (cpu_nr > 5)
+        cpu_nr -= 7;
+
     log_info("do_work: Waiting for dispatcher work\n");
-    worker_responses[0].flag = FINISHED;
-    while (1) {
-        while (dispatcher_requests[0].flag == WAITING);
-        worker_responses[0].cont = NULL;
-        dispatcher_requests[0].flag = WAITING;
+    log_info("do_work: cpu_nr = %d\n", cpu_nr);
+    worker_responses[cpu_nr].flag = FINISHED;
+    uint64_t foo[100000];
+
+    /*
+    if (cpu_nr != 1)
+        while(1);
+    */
+
+    for(i = 0; i < 100000; i++) {
+        while (dispatcher_requests[cpu_nr].flag == WAITING);
+        //worker_responses[cpu_nr].cont = NULL;
+        dispatcher_requests[cpu_nr].flag = WAITING;
         //log_info("do_work: Got dispatcher work\n");
-        dispatcher_requests[0].cont->uc_link = &uctx_main;
-        makecontext(dispatcher_requests[0].cont, generic_work, 0);
+        dispatcher_requests[cpu_nr].cont->uc_link = &uctx_main;
+        makecontext(dispatcher_requests[cpu_nr].cont, generic_work, 0);
 
         //log_info("do_work: calling swapcontext_fast()\n");
-        ret = swapcontext_fast(&uctx_main, dispatcher_requests[0].cont);
+        ret = swapcontext_fast(&uctx_main, dispatcher_requests[cpu_nr].cont);
         if (ret) {
             log_err("do_work: failed to swapcontext_fast\n");
             exit(-1);
         }
         //log_info("do_work: swapped back to main context\n");
-        worker_responses[0].cont = dispatcher_requests[0].cont;
-        worker_responses[0].flag = FINISHED;
+        worker_responses[cpu_nr].cont = dispatcher_requests[cpu_nr].cont;
+        worker_responses[cpu_nr].flag = FINISHED;
+        end64 = rdtsc();
+        foo[i] = (end64 - start64) / 2.8;
+        start64 = end64;
     }
 
+    if (cpu_nr == 1) {
+        for (i = 0; i < 100000; i++) {
+            printf("%lu\n", foo[i]);
+        }
+    }
     /*
     log_info("do_work: starting benchmarking...\n");
     clock_gettime(CLOCK_MONOTONIC, &start);

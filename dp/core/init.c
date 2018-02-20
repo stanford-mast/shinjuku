@@ -83,11 +83,11 @@ extern int cp_init(void);
 extern int mempool_init(void);
 extern int init_migration_cpu(void);
 extern int dpdk_init(void);
-extern void do_work(void);
+extern void do_work(int cpu_nr);
 extern int context_init(void);
 extern int context_init_mempool(void);
-extern void rand_init(void);
-extern double rand_expo(double lambda);
+extern int eth_process_recv(void);
+extern int eth_process_poll(void);
 
 extern struct mempool context_pool;
 extern struct mempool stack_pool;
@@ -231,13 +231,11 @@ static int init_network_cpu(void)
 
 	percpu_get(eth_num_queues) = eth_dev_count;
 
-
 #if 0	/* initialize perqueue data structures */
 	for_each_queue(idx) {
 		perqueue_get(eth_txq) = percpu_get(eth_txqs[idx]);
 	}
 #endif
-
 
 	return 0;
 }
@@ -262,14 +260,16 @@ static int init_create_cpu(unsigned int cpu, int first)
 	}
 
 	log_info("init: percpu phase %d\n", cpu);
-	for (i = 0; init_tbl[i].name; i++)
+	for (i = 0; init_tbl[i].name; i++) {
+                if ((i == 16) && (cpu == 0))
+                    continue;
 		if (init_tbl[i].fcpu) {
 			ret = init_tbl[i].fcpu();
 			log_info("init: module %-10s on %d: %s \n", init_tbl[i].name, percpu_get(cpu_id), (ret ? "FAILURE" : "SUCCESS"));
 			if (ret)
 				panic("could not initialize IX\n");
 		}
-
+        }
 
 	log_info("init: CPU %d ready\n", cpu);
 	return 0;
@@ -327,11 +327,13 @@ int init_do_spawn(void *arg)
 
 static int init_fg_cpu(void)
 {
+        log_info("init_fg_cpu: start\n");
 	int fg_id, ret;
 	int start;
 	DEFINE_BITMAP(fg_bitmap, ETH_MAX_TOTAL_FG);
 
-	start = percpu_get(cpu_nr);
+	//start = percpu_get(cpu_nr);
+        start = 0;
 
 	bitmap_init(fg_bitmap, ETH_MAX_TOTAL_FG, 0);
 	for (fg_id = start; fg_id < nr_flow_groups; fg_id += CFG.num_cpus)
@@ -340,6 +342,7 @@ static int init_fg_cpu(void)
 	eth_fg_assign_to_cpu(fg_bitmap, percpu_get(cpu_nr));
 
 	for (fg_id = start; fg_id < nr_flow_groups; fg_id += CFG.num_cpus) {
+	//for (fg_id = start; fg_id < nr_flow_groups; fg_id ++) {
 		eth_fg_set_current(fgs[fg_id]);
 
 		assert(fgs[fg_id]->cur_cpu == percpu_get(cpu_id));
@@ -378,8 +381,7 @@ void *start_cpu(void *arg)
 	unsigned int cpu_nr_ = (unsigned int)(unsigned long) arg;
 	unsigned int cpu = CFG.cpu[cpu_nr_];
 
-
-	ret = init_create_cpu(cpu, 0);
+        ret = init_create_cpu(cpu, 0);
 	if (ret) {
 		log_err("init: failed to initialize CPU %d\n", cpu);
 		exit(ret);
@@ -393,17 +395,26 @@ void *start_cpu(void *arg)
 	percpu_get(cp_cmd) = &cp_shmem->command[started_cpus];
 	percpu_get(cp_cmd)->cpu_state = CP_CPU_STATE_RUNNING;
 
+        log_info("start_cpu: Waiting before pthread_barrier\n");
 	pthread_barrier_wait(&start_barrier);
+        log_info("start_cpu: Moved past barrier\n");
 
+        /*
 	ret = init_fg_cpu();
 	if (ret) {
 		log_err("init: failed to initialize flow groups\n");
 		exit(ret);
 	}
+        */
 
-    log_info("init: Just before do_work()\n");
-    do_work();
-	// wait_for_spawn();
+        log_info("start_cpu: receiving packets\n");
+        while(1) {
+                eth_process_poll();
+                eth_process_recv();
+        }
+
+        //FIXME Call do_work() here
+        //do_work(cpu);
 
 	return NULL;
 }
@@ -449,6 +460,7 @@ static int init_hw(void)
 			return ret;
 		}
 
+                /*
 		for (j = 0; j < eth->data->nb_rx_fgs; j++) {
 			eth_fg_init_cpu(&eth->data->rx_fgs[j]);
 			fgs[fg_id] = &eth->data->rx_fgs[j];
@@ -456,24 +468,27 @@ static int init_hw(void)
 			fgs[fg_id]->fg_id = fg_id;
 			fg_id++;
 		}
+                */
 	}
 
+        /*
 	nr_flow_groups = fg_id;
 	cp_shmem->nr_flow_groups = nr_flow_groups;
 
 	mempool_init();
+        */
 
 	if (CFG.num_cpus > 1) {
 		pthread_barrier_wait(&start_barrier);
 	}
 
+        /*
 	init_fg_cpu();
 	if (ret) {
 		log_err("init: failed to initialize flow groups\n");
 		exit(ret);
 	}
-
-	log_info("init: barrier after all CPU initialization\n");
+        */
 
 	return 0;
 }
@@ -525,7 +540,7 @@ static int init_firstcpu(void)
 
 int main(int argc, char *argv[])
 {
-	int ret, i;
+	int ret, i, j;
     ucontext_t uctx;
     struct timespec start, end;
     uint64_t start64, end64;
@@ -537,41 +552,75 @@ int main(int argc, char *argv[])
 
 	log_info("init: cpu phase\n");
 	for (i = 0; init_tbl[i].name; i++)
-    {
+        {
 		if (init_tbl[i].f) {
 			ret = init_tbl[i].f();
 			log_info("init: module %-10s %s\n", init_tbl[i].name, (ret ? "FAILURE" : "SUCCESS"));
 			if (ret)
 				panic("could not initialize IX\n");
+                }
         }
-    }
-    log_info("init done\n");
+        log_info("init done\n");
+        while(1);
+        // Waiting for one context to be executed so that both dispatcher and
+        // worker are ready.
+        
+        /*
+        while (worker_responses[1].flag == RUNNING);
+        worker_responses[1].flag = RUNNING;
+        dispatcher_requests[1].cont = context_alloc(&context_pool, &stack_pool);
+        dispatcher_requests[1].flag = ACTIVE;
 
-    // Waiting for one context to be executed so that both dispatcher and
-    // worker are ready.
+        while (worker_responses[2].flag == RUNNING);
+        worker_responses[2].flag = RUNNING;
+        dispatcher_requests[2].cont = context_alloc(&context_pool, &stack_pool);
+        dispatcher_requests[2].flag = ACTIVE;
+        */
 
-    while (worker_responses[0].flag == RUNNING);
-    worker_responses[0].flag = RUNNING;
-    dispatcher_requests[0].cont = context_alloc(&context_pool, &stack_pool);
-    dispatcher_requests[0].flag = ACTIVE;
-    /*
-    while (worker_responses[0].flag == RUNNING);
-    context_free(worker_responses[0].cont, &context_pool, &stack_pool);
-    */
+        /*
+        for (i = 1; i < MAX_WORKERS + 1; i++) {
+            while (worker_responses[i].flag == RUNNING);
+            worker_responses[i].flag = RUNNING;
+            dispatcher_requests[i].cont = context_alloc(&context_pool, &stack_pool);
+            dispatcher_requests[i].flag = ACTIVE;
+        }
+
+        while (worker_responses[4].flag == RUNNING);
+        worker_responses[4].flag = RUNNING;
+        dispatcher_requests[4].cont = context_alloc(&context_pool, &stack_pool);
+        dispatcher_requests[4].flag = ACTIVE;
+
+        while (worker_responses[5].flag == RUNNING);
+        worker_responses[5].flag = RUNNING;
+        dispatcher_requests[5].cont = context_alloc(&context_pool, &stack_pool);
+        dispatcher_requests[5].flag = ACTIVE;
+        */
+
+        /*
+        while (worker_responses[0].flag == RUNNING);
+        context_free(worker_responses[0].cont, &context_pool, &stack_pool);
+        */
 
     uint64_t foo[100000];
+    int flag = 0;
     //clock_gettime(CLOCK_MONOTONIC, &start);
-    for (i = 0; i < 100000; i++) {
+    for (i = 0; i < 100000;) {
         cpu_serialize();
         start64 = rdtsc();
 
         // Measure context allocation, dispatching, execution, and finish time.
-        while (worker_responses[0].flag == RUNNING);
-        context_free(worker_responses[0].cont, &context_pool, &stack_pool);
-        //log_info("main: received request from worker_core\n");
-        worker_responses[0].flag = RUNNING;
-        dispatcher_requests[0].cont = context_alloc(&context_pool, &stack_pool);
-        dispatcher_requests[0].flag = ACTIVE;
+        for (j = 1; j < 6; j++) {
+            if (worker_responses[j].flag != RUNNING) {
+                //cpu_serialize();
+                //start64 = rdtsc();
+                context_free(worker_responses[j].cont, &context_pool, &stack_pool);
+                worker_responses[j].flag = RUNNING;
+                dispatcher_requests[j].cont = context_alloc(&context_pool, &stack_pool);
+                dispatcher_requests[j].flag = ACTIVE;
+                //end64 = rdtscp(NULL);
+                //foo[i++] = (end64 - start64) / 2.8;
+            }
+        }
         //log_info("main: sent context to worker core\n");
 
         // Measure context allocation and free time.
@@ -581,7 +630,10 @@ int main(int argc, char *argv[])
         */
 
         end64 = rdtscp(NULL);
-        foo[i] = (end64 - start64) / 2.8;
+        //if (flag)
+        foo[i++] = (end64 - start64) / 2.8;
+
+        //flag = 0;
         //log_info("main: context full time: %lu ns\n",
         //     (end64 - start64) / 2.8);
     }
