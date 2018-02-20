@@ -70,24 +70,6 @@ static struct power_accumulator power_acc;
 
 unsigned int eth_rx_max_batch = 64;
 
-/**
- * eth_process_poll - polls HW for new packets
- *
- * Returns the number of new packets received.
- */
-int eth_process_poll(void)
-{
-	int i, count = 0;
-	struct eth_rx_queue *rxq;
-
-	for (i = 0; i < percpu_get(eth_num_queues); i++) {
-		rxq = percpu_get(eth_rxqs[i]);
-		count += eth_rx_poll(rxq);
-	}
-
-	return count;
-}
-
 static int eth_process_recv_queue(struct eth_rx_queue *rxq)
 {
 	struct mbuf *pos = rxq->head;

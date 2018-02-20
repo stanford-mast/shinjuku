@@ -39,9 +39,11 @@
 
 extern unsigned int eth_rx_max_batch;
 
+DECLARE_PERCPU(int, eth_num_queues);
+DECLARE_PERCPU(struct eth_rx_queue *, eth_rxqs[]);
 
 /*
- * Recieve Queue API
+ * Receive Queue API
  */
 
 struct eth_rx_queue {
@@ -72,6 +74,24 @@ struct eth_rx_queue {
 static inline int eth_rx_poll(struct eth_rx_queue *rx)
 {
 	return rx->poll(rx);
+}
+
+/**
+ * eth_process_poll - polls HW for new packets
+ *
+ * Returns the number of new packets received.
+ */
+static inline int eth_process_poll(void)
+{
+        int i, count = 0;
+        struct eth_rx_queue *rxq;
+
+        for (i = 0; i < percpu_get(eth_num_queues); i++) {
+                rxq = percpu_get(eth_rxqs[i]);
+                count += eth_rx_poll(rxq);
+        }
+
+        return count;
 }
 
 /**
@@ -187,11 +207,8 @@ static inline int eth_send_one(struct eth_tx_queue *txq, struct mbuf *mbuf, size
 	return eth_send(txq, mbuf);
 }
 
-DECLARE_PERCPU(int, eth_num_queues);
-DECLARE_PERCPU(struct eth_rx_queue *, eth_rxqs[]);
 DECLARE_PERCPU(struct eth_tx_queue *, eth_txqs[]);
 
-extern int eth_process_poll(void);
 extern int eth_process_recv(void);
 extern void eth_process_send(void);
 extern void eth_process_reclaim(void);

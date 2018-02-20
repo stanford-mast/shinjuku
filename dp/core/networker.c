@@ -27,6 +27,8 @@
  * system and forwading them to the dispatcher.
  */
 
+#include <ix/ethdev.h>
+
 /**
  * do_networking - implements core receiving networking functionality
  */
