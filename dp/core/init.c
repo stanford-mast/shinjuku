@@ -83,11 +83,9 @@ extern int cp_init(void);
 extern int mempool_init(void);
 extern int init_migration_cpu(void);
 extern int dpdk_init(void);
-extern void do_work(int cpu_nr);
 extern int context_init(void);
-extern int context_init_mempool(void);
-extern int eth_process_recv(void);
-extern int eth_process_poll(void);
+extern void do_work(void);
+extern void do_networking(void);
 
 extern struct mempool context_pool;
 extern struct mempool stack_pool;
@@ -113,14 +111,12 @@ static struct init_vector_t init_tbl[] = {
 	{ "context", context_init, NULL, NULL},      // after firstcpu
 	{ "memp",    memp_init,    memp_init_cpu, NULL},
 	{ "tcpapi",  tcp_api_init, tcp_api_init_cpu, NULL},
-	{ "ethdev",  init_ethdev,  NULL, NULL},
 	{ "migration", NULL, init_migration_cpu, NULL},
 	{ "hw",      init_hw,      NULL, NULL},               // spaws per-cpu init sequence
 	{ "syscall", NULL,         syscall_init_cpu, NULL},
 #ifdef ENABLE_KSTATS
 	{ "kstats",  NULL,         kstats_init_cpu, NULL},    // after timer
 #endif
-	{ "init-net", NULL,         init_network_cpu, NULL},  // FIXME should be split
 	{ NULL, NULL, NULL, NULL}
 };
 
@@ -206,36 +202,37 @@ err:
 	return ret;
 }
 
-static DEFINE_SPINLOCK(assign_lock);
-
 static int init_network_cpu(void)
 {
 	int ret, i;
-	spin_lock(&assign_lock);
 	ret = 0;
 	for (i = 0; i < eth_dev_count; i++) {
 		struct ix_rte_eth_dev *eth = eth_dev[i];
 		ret = eth_dev_get_rx_queue(eth, &percpu_get(eth_rxqs[i]));
 		if (ret) {
-			spin_unlock(&assign_lock);
 			return ret;
 		}
 
 		ret = eth_dev_get_tx_queue(eth, &percpu_get(eth_txqs[i]));
 		if (ret) {
-			spin_unlock(&assign_lock);
 			return ret;
 		}
 	}
-	spin_unlock(&assign_lock);
+
+	for (i = 0; i < CFG.num_ethdev; i++) {
+		struct ix_rte_eth_dev *eth = eth_dev[i];
+
+		if (!eth->data->nb_rx_queues)
+			continue;
+
+		ret = eth_dev_start(eth);
+		if (ret) {
+			log_err("init: failed to start eth%d\n", i);
+			return ret;
+		}
+        }
 
 	percpu_get(eth_num_queues) = eth_dev_count;
-
-#if 0	/* initialize perqueue data structures */
-	for_each_queue(idx) {
-		perqueue_get(eth_txq) = percpu_get(eth_txqs[idx]);
-	}
-#endif
 
 	return 0;
 }
@@ -261,8 +258,6 @@ static int init_create_cpu(unsigned int cpu, int first)
 
 	log_info("init: percpu phase %d\n", cpu);
 	for (i = 0; init_tbl[i].name; i++) {
-                if ((i == 16) && (cpu == 0))
-                    continue;
 		if (init_tbl[i].fcpu) {
 			ret = init_tbl[i].fcpu();
 			log_info("init: module %-10s on %d: %s \n", init_tbl[i].name, percpu_get(cpu_id), (ret ? "FAILURE" : "SUCCESS"));
@@ -272,103 +267,6 @@ static int init_create_cpu(unsigned int cpu, int first)
         }
 
 	log_info("init: CPU %d ready\n", cpu);
-	return 0;
-}
-
-static pthread_mutex_t spawn_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t spawn_cond = PTHREAD_COND_INITIALIZER;
-
-struct spawn_req {
-	void *arg;
-	struct spawn_req *next;
-};
-
-static struct spawn_req *spawn_reqs;
-extern void *pthread_entry(void *arg);
-
-static void wait_for_spawn(void)
-{
-	struct spawn_req *req;
-	void *arg;
-
-	pthread_mutex_lock(&spawn_mutex);
-	while (!spawn_reqs)
-		pthread_cond_wait(&spawn_cond, &spawn_mutex);
-	req = spawn_reqs;
-	spawn_reqs = spawn_reqs->next;
-	pthread_mutex_unlock(&spawn_mutex);
-
-	arg = req->arg;
-	free(req);
-
-	log_info("init: user spawned cpu %d\n", percpu_get(cpu_id));
-	pthread_entry(arg);
-}
-
-int init_do_spawn(void *arg)
-{
-	struct spawn_req *req;
-
-	pthread_mutex_lock(&spawn_mutex);
-	req = malloc(sizeof(struct spawn_req));
-	if (!req) {
-		pthread_mutex_unlock(&spawn_mutex);
-		return -ENOMEM;
-	}
-
-	req->next = spawn_reqs;
-	req->arg = arg;
-	spawn_reqs = req;
-	pthread_cond_broadcast(&spawn_cond);
-	pthread_mutex_unlock(&spawn_mutex);
-
-	return 0;
-}
-
-static int init_fg_cpu(void)
-{
-        log_info("init_fg_cpu: start\n");
-	int fg_id, ret;
-	int start;
-	DEFINE_BITMAP(fg_bitmap, ETH_MAX_TOTAL_FG);
-
-	//start = percpu_get(cpu_nr);
-        start = 0;
-
-	bitmap_init(fg_bitmap, ETH_MAX_TOTAL_FG, 0);
-	for (fg_id = start; fg_id < nr_flow_groups; fg_id += CFG.num_cpus)
-		bitmap_set(fg_bitmap, fg_id);
-
-	eth_fg_assign_to_cpu(fg_bitmap, percpu_get(cpu_nr));
-
-	for (fg_id = start; fg_id < nr_flow_groups; fg_id += CFG.num_cpus) {
-	//for (fg_id = start; fg_id < nr_flow_groups; fg_id ++) {
-		eth_fg_set_current(fgs[fg_id]);
-
-		assert(fgs[fg_id]->cur_cpu == percpu_get(cpu_id));
-
-		tcp_init(fgs[fg_id]);
-		ret = tcp_api_init_fg();
-		if (ret) {
-			log_err("init: failed to initialize tcp_api \n");
-			return ret;
-		}
-
-		timer_init_fg();
-	}
-
-	unset_current_fg();
-
-	fg_id = outbound_fg_idx();
-	fgs[fg_id] = malloc(sizeof(struct eth_fg));
-	memset(fgs[fg_id], 0, sizeof(struct eth_fg));
-	eth_fg_init(fgs[fg_id], fg_id);
-	eth_fg_init_cpu(fgs[fg_id]);
-	fgs[fg_id]->cur_cpu = percpu_get(cpu_id);
-	fgs[fg_id]->fg_id = fg_id;
-	fgs[fg_id]->eth = percpu_get(eth_rxqs[0])->dev;
-	tcp_init(fgs[fg_id]);
-
 	return 0;
 }
 
@@ -387,34 +285,32 @@ void *start_cpu(void *arg)
 		exit(ret);
 	}
 
-	started_cpus++;
-
 	/* percpu_get(cp_cmd) of the first CPU is initialized in init_hw. */
 
 	percpu_get(cpu_nr) = cpu_nr_;
 	percpu_get(cp_cmd) = &cp_shmem->command[started_cpus];
 	percpu_get(cp_cmd)->cpu_state = CP_CPU_STATE_RUNNING;
 
-        log_info("start_cpu: Waiting before pthread_barrier\n");
-	pthread_barrier_wait(&start_barrier);
-        log_info("start_cpu: Moved past barrier\n");
-
-        /*
-	ret = init_fg_cpu();
-	if (ret) {
-		log_err("init: failed to initialize flow groups\n");
-		exit(ret);
-	}
-        */
-
-        log_info("start_cpu: receiving packets\n");
-        while(1) {
-                eth_process_poll();
-                eth_process_recv();
+        log_info("start_cpu: starting cpu-specific work\n");
+        if (cpu_nr_ == 1) {
+                ret = init_ethdev();
+                if (ret) {
+                        log_err("init: failed to initialize ethernet device\n");
+                        exit(ret);
+                }
+                ret = init_network_cpu();
+                if (ret) {
+                        log_err("init: failed to initialize network cpu\n");
+                        exit(ret);
+                }
+	        started_cpus++;
+	        pthread_barrier_wait(&start_barrier);
+                do_networking();
+        } else {
+	        started_cpus++;
+	        pthread_barrier_wait(&start_barrier);
+                do_work();
         }
-
-        //FIXME Call do_work() here
-        //do_work(cpu);
 
 	return NULL;
 }
@@ -423,8 +319,6 @@ static int init_hw(void)
 {
 	int i, ret = 0;
 	pthread_t tid;
-	int j;
-	int fg_id;
 
 	// will spawn per-cpu initialization sequence on CPU0
 	ret = init_create_cpu(CFG.cpu[0], 1);
@@ -447,48 +341,9 @@ static int init_hw(void)
 			usleep(100);
 	}
 
-	fg_id = 0;
-	for (i = 0; i < CFG.num_ethdev; i++) {
-		struct ix_rte_eth_dev *eth = eth_dev[i];
-
-		if (!eth->data->nb_rx_queues)
-			continue;
-
-		ret = eth_dev_start(eth);
-		if (ret) {
-			log_err("init: failed to start eth%d\n", i);
-			return ret;
-		}
-
-                /*
-		for (j = 0; j < eth->data->nb_rx_fgs; j++) {
-			eth_fg_init_cpu(&eth->data->rx_fgs[j]);
-			fgs[fg_id] = &eth->data->rx_fgs[j];
-			fgs[fg_id]->dev_idx = i;
-			fgs[fg_id]->fg_id = fg_id;
-			fg_id++;
-		}
-                */
-	}
-
-        /*
-	nr_flow_groups = fg_id;
-	cp_shmem->nr_flow_groups = nr_flow_groups;
-
-	mempool_init();
-        */
-
 	if (CFG.num_cpus > 1) {
 		pthread_barrier_wait(&start_barrier);
 	}
-
-        /*
-	init_fg_cpu();
-	if (ret) {
-		log_err("init: failed to initialize flow groups\n");
-		exit(ret);
-	}
-        */
 
 	return 0;
 }

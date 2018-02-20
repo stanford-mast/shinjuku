@@ -75,7 +75,7 @@ static ucontext_t * get_work(ucontext_t * fini_uctx)
     return fini_uctx;
 }
 
-void do_work(int cpu_nr)
+void do_work(void)
 {
     log_info("do_work: starting...\n");
     // FIXME Remove these after benchmarking finishes
@@ -83,9 +83,6 @@ void do_work(int cpu_nr)
     uint64_t start64, end64;
     int i;
     int ret;
-
-    if (cpu_nr > 5)
-        cpu_nr -= 7;
 
     log_info("do_work: Waiting for dispatcher work\n");
     log_info("do_work: cpu_nr = %d\n", cpu_nr);

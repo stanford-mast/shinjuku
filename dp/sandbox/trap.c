@@ -164,7 +164,11 @@ void *pthread_entry(void *arg)
 }
 
 extern bool sys_spawn_cores;
-extern int init_do_spawn(void *arg);
+
+static int init_do_spawn(void *arg)
+{
+        return -1;
+}
 
 static long dune_pthread_create(struct dune_tf *tf)
 {
