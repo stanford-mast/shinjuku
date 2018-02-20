@@ -34,8 +34,11 @@
  */
 void do_networking(void)
 {
+        int num_recv;
         while(1) {
                 eth_process_poll();
-                eth_process_recv();
+                num_recv = eth_process_recv();
+                if (num_recv != 0)
+                    log_info("Got %d packets\n", num_recv);
         }
 }

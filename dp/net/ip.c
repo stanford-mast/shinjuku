@@ -62,7 +62,7 @@ void ip_addr_to_str(struct ip_addr *addr, char *str)
 		 (addr->addr & 0xff));
 }
 
-static void ip_input(struct eth_fg *cur_fg, struct mbuf *pkt, struct ip_hdr *hdr)
+static int ip_input(struct eth_fg *cur_fg, struct mbuf *pkt, struct ip_hdr *hdr)
 {
 	int hdrlen, pktlen;
 
@@ -104,25 +104,22 @@ static void ip_input(struct eth_fg *cur_fg, struct mbuf *pkt, struct ip_hdr *hdr
 
 	switch (hdr->proto) {
 	case IPPROTO_TCP:
-                log_info("ip: dropping TCP packet\n");
+                log_warn("ip: dropping TCP packet\n");
                 goto out;
 	case IPPROTO_UDP:
-		udp_input(pkt, hdr,
-			  mbuf_nextd_off(hdr, struct udp_hdr *, hdrlen));
-		break;
+                return 0;
+		//return udp_input(pkt, hdr,
+		//     	         mbuf_nextd_off(hdr, struct udp_hdr *, hdrlen));
 	case IPPROTO_ICMP:
-		icmp_input(cur_fg, pkt,
-			   mbuf_nextd_off(hdr, struct icmp_hdr *, hdrlen),
-			   pktlen);
-		break;
+                log_warn("ip: dropping ICMP packet\n");
+                goto out;
 	default:
 		goto out;
 	}
 
-	return;
-
 out:
 	mbuf_free(pkt);
+        return -1;
 }
 
 static struct eth_ctx measure_ctx = {
@@ -134,15 +131,10 @@ static struct eth_ctx measure_ctx = {
  * eth_input - process an ethernet packet
  * @pkt: the mbuf containing the packet
  */
-void eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt)
+int eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt)
 {
 	struct eth_hdr *ethhdr = mbuf_mtod(pkt, struct eth_hdr *);
 	struct timespec now;
-
-        // No need for check fg here.
-	//set_current_queue(rx_queue);
-	//fg = fgs[pkt->fg_id];
-	//eth_fg_set_current(fg);
 
 	log_debug("ip: got ethernet packet of len %ld, type %x\n",
 		  pkt->len, ntoh16(ethhdr->type));
@@ -160,11 +152,11 @@ void eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt)
 	}
 
 	if (ethhdr->type == hton16(ETHTYPE_IP))
-		ip_input(NULL, pkt, mbuf_nextd(ethhdr, struct ip_hdr *));
-	else if (ethhdr->type == hton16(ETHTYPE_ARP))
-		arp_input(pkt, mbuf_nextd(ethhdr, struct arp_hdr *));
-	else
+		return ip_input(NULL, pkt, mbuf_nextd(ethhdr, struct ip_hdr *));
+	else {
 		mbuf_free(pkt);
+                return -1;
+        }
 }
 
 /* FIXME: change when we integrate better with LWIP */

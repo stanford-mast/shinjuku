@@ -231,5 +231,5 @@ extern void mbuf_exit_cpu(void);
  */
 struct eth_rx_queue;
 
-extern void eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt);
+extern int eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt);
 

@@ -41,7 +41,7 @@
 DECLARE_PERCPU(int, eth_num_queues);
 
 struct eth_rx_queue * eth_rxqs[NETHDEV];
-
+struct mbuf * recv_mbufs[ETH_RX_MAX_BATCH];
 
 /*
  * Receive Queue API
@@ -95,9 +95,9 @@ static inline int eth_process_poll(void)
         return count;
 }
 
-static inline int eth_process_recv_queue(struct eth_rx_queue *rxq)
+static inline int eth_process_recv_queue(struct eth_rx_queue *rxq, struct mbuf * pos)
 {
-        struct mbuf *pos = rxq->head;
+        pos = rxq->head;
 
         if (!pos)
                 return -EAGAIN;
@@ -106,9 +106,7 @@ static inline int eth_process_recv_queue(struct eth_rx_queue *rxq)
         rxq->head = pos->next;
         rxq->len--;
 
-        eth_input(rxq, pos);
-
-        return 0;
+        return eth_input(rxq, pos);
 }
 
 /** eth_process_recv - retrieves pending received packets
@@ -119,6 +117,7 @@ static inline int eth_process_recv(void)
 {
         int i, count = 0;
         bool empty;
+        struct mbuf * pos;
 
         /*
         * We round robin through each queue one packet at
@@ -129,14 +128,15 @@ static inline int eth_process_recv(void)
                 empty = true;
                 for (i = 0; i < percpu_get(eth_num_queues); i++) {
                         struct eth_rx_queue *rxq = eth_rxqs[i];
-                        if (!eth_process_recv_queue(rxq)) {
+                        if (!eth_process_recv_queue(rxq, pos)) {
+                                recv_mbufs[count] = pos;
                                 count++;
                                 empty = false;
                         }
                 }
         } while (!empty && count < ETH_RX_MAX_BATCH);
 
-        return empty;
+        return count;
 }
 
 /**
@@ -150,10 +150,6 @@ static inline int eth_process_recv(void)
  */
 static inline int eth_recv(struct eth_rx_queue *rxq, struct mbuf *mbuf)
 {
-        /* No need for fg anymore */
-	//if (eth_recv_handle_fg_transition(rxq, mbuf))
-	//	return 0;
-
 	if (unlikely(rxq->len >= ETH_RX_MAX_DEPTH))
 		return -EBUSY;
 
@@ -254,7 +250,6 @@ static inline int eth_send_one(struct eth_tx_queue *txq, struct mbuf *mbuf, size
 
 DECLARE_PERCPU(struct eth_tx_queue *, eth_txqs[]);
 
-extern int eth_process_recv(void);
 extern void eth_process_send(void);
 extern void eth_process_reclaim(void);
 
