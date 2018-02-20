@@ -79,7 +79,6 @@ static struct config_vector_t config_tbl[] = {
 	{ "arp",          parse_arp},
 	{ "devices",      parse_devices},
 	{ "cpu",          parse_cpu},
-	{ "batch",        parse_batch},
 	{ "loader_path",  parse_loader_path},
 	{ NULL,           NULL}
 };

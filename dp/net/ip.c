@@ -104,9 +104,8 @@ static void ip_input(struct eth_fg *cur_fg, struct mbuf *pkt, struct ip_hdr *hdr
 
 	switch (hdr->proto) {
 	case IPPROTO_TCP:
-		/* FIXME: change when we integrate better with LWIP */
-		tcp_input_tmp(cur_fg, pkt, hdr, mbuf_nextd_off(hdr, void *, hdrlen));
-		break;
+                log_info("ip: dropping TCP packet\n");
+                goto out;
 	case IPPROTO_UDP:
 		udp_input(pkt, hdr,
 			  mbuf_nextd_off(hdr, struct udp_hdr *, hdrlen));
@@ -138,7 +137,6 @@ static struct eth_ctx measure_ctx = {
 void eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt)
 {
 	struct eth_hdr *ethhdr = mbuf_mtod(pkt, struct eth_hdr *);
-	struct eth_fg *fg;
 	struct timespec now;
 
         // No need for check fg here.
@@ -162,14 +160,11 @@ void eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt)
 	}
 
 	if (ethhdr->type == hton16(ETHTYPE_IP))
-		ip_input(fg, pkt, mbuf_nextd(ethhdr, struct ip_hdr *));
+		ip_input(NULL, pkt, mbuf_nextd(ethhdr, struct ip_hdr *));
 	else if (ethhdr->type == hton16(ETHTYPE_ARP))
 		arp_input(pkt, mbuf_nextd(ethhdr, struct arp_hdr *));
 	else
 		mbuf_free(pkt);
-
-//	unset_current_queue();
-	unset_current_fg();
 }
 
 /* FIXME: change when we integrate better with LWIP */
