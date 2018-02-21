@@ -75,7 +75,7 @@ static int ip_input(struct eth_fg *cur_fg, struct mbuf *pkt, struct ip_hdr *hdr)
         addr.addr = ntoh32(hdr->dst_addr.addr);
         ip_addr_to_str(&addr, dst);
 
-        log_info("ip: got IP packet from '%s' to '%s'\n", src, dst);
+        log_info("ip: got IP packet from '%s' to '%s' with timestamp %lu\n", src, dst, pkt->timestamp);
 
 	/* check that the packet is long enough */
 	if (!mbuf_enough_space(pkt, hdr, sizeof(struct ip_hdr)))

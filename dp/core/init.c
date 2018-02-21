@@ -86,6 +86,7 @@ extern int dpdk_init(void);
 extern int context_init(void);
 extern void do_work(void);
 extern void do_networking(void);
+extern void do_dispatching(void);
 
 extern struct mempool context_pool;
 extern struct mempool stack_pool;
@@ -233,6 +234,8 @@ static int init_network_cpu(void)
         }
 
 	percpu_get(eth_num_queues) = eth_dev_count;
+
+        networker_pointers.cnt = 0;
 
 	return 0;
 }
@@ -416,7 +419,8 @@ int main(int argc, char *argv[])
                 }
         }
         log_info("init done\n");
-        while(1);
+
+        do_dispatching();
         // Waiting for one context to be executed so that both dispatcher and
         // worker are ready.
         

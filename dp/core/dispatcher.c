@@ -21,29 +21,27 @@
  */
 
 /*
- * networker.c - networking core functionality
+ * dispatcher.c - dispatcher core functionality
  *
- * A single core is responsible for receiving all network packets in the
- * system and forwading them to the dispatcher.
+ * A single core is responsible for receiving network packets from the network
+ * core and dispatching these packets or contexts to the worker cores.
  */
 
-#include <ix/ethqueue.h>
 #include <ix/delegation.h>
 
 /**
- * do_networking - implements networking core's functionality
+ * do_dispatching - implements dispatcher core's main loop
  */
-void do_networking(void)
+void do_dispatching(void)
 {
-        int i, num_recv;
+        int i;
+
         while(1) {
-                eth_process_poll();
-                num_recv = eth_process_recv();
-                if (num_recv == 0)
-                        continue;
-                while (networker_pointers.cnt != 0);
-                for (i = 0; i < num_recv; i++)
-                        networker_pointers.pkts[i] = recv_mbufs[i];
-                networker_pointers.cnt = num_recv;
+                if (networker_pointers.cnt != 0) {
+                        for (i = 0; i < networker_pointers.cnt; i++)
+                                log_info("Got packet with timestamp %lu\n",
+                                         networker_pointers.pkts[i]->timestamp);
+                        networker_pointers.cnt = 0;
+                }
         }
 }

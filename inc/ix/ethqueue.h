@@ -36,7 +36,7 @@
 #define ETH_DEV_RX_QUEUE_SZ     512
 #define ETH_DEV_TX_QUEUE_SZ     4096
 #define ETH_RX_MAX_DEPTH	32768
-#define ETH_RX_MAX_BATCH        5
+#define ETH_RX_MAX_BATCH        7
 
 DECLARE_PERCPU(int, eth_num_queues);
 
@@ -95,18 +95,18 @@ static inline int eth_process_poll(void)
         return count;
 }
 
-static inline int eth_process_recv_queue(struct eth_rx_queue *rxq, struct mbuf * pos)
+static inline int eth_process_recv_queue(struct eth_rx_queue *rxq, struct mbuf ** pos_p)
 {
-        pos = rxq->head;
+        (*pos_p) = rxq->head;
 
-        if (!pos)
+        if (!(*pos_p))
                 return -EAGAIN;
 
         /* NOTE: pos could get freed after eth_input(), so check here */
-        rxq->head = pos->next;
+        rxq->head = (*pos_p)->next;
         rxq->len--;
 
-        return eth_input(rxq, pos);
+        return eth_input(rxq, *pos_p);
 }
 
 /** eth_process_recv - retrieves pending received packets
@@ -128,7 +128,7 @@ static inline int eth_process_recv(void)
                 empty = true;
                 for (i = 0; i < percpu_get(eth_num_queues); i++) {
                         struct eth_rx_queue *rxq = eth_rxqs[i];
-                        if (!eth_process_recv_queue(rxq, pos)) {
+                        if (!eth_process_recv_queue(rxq, &pos)) {
                                 recv_mbufs[count] = pos;
                                 count++;
                                 empty = false;
