@@ -83,10 +83,9 @@ void do_work(void)
     uint64_t start64, end64;
     int i;
     int ret;
-
-    log_info("do_work: Waiting for dispatcher work\n");
-    log_info("do_work: cpu_nr = %d\n", cpu_nr);
-    worker_responses[cpu_nr].flag = FINISHED;
+        int cpu_nr_ = percpu_get(cpu_nr);
+        log_info("do_work: cpu_nr = %d\n", cpu_nr_);
+        worker_responses[cpu_nr_].flag = FINISHED;
     uint64_t foo[100000];
 
     /*
@@ -94,33 +93,44 @@ void do_work(void)
         while(1);
     */
 
+        log_info("do_work: Waiting for dispatcher work\n");
+        while (1) {
+                while (dispatcher_requests[cpu_nr_].flag == WAITING);
+                dispatcher_requests[cpu_nr_].flag = WAITING;
+                log_info("Dequeued task with type %d and timestamp %lu\n",
+                         dispatcher_requests[cpu_nr_].type,
+                         dispatcher_requests[cpu_nr_].timestamp);
+                worker_responses[cpu_nr_].flag = FINISHED;
+        }
+    /*
     for(i = 0; i < 100000; i++) {
         while (dispatcher_requests[cpu_nr].flag == WAITING);
         //worker_responses[cpu_nr].cont = NULL;
         dispatcher_requests[cpu_nr].flag = WAITING;
         //log_info("do_work: Got dispatcher work\n");
-        dispatcher_requests[cpu_nr].cont->uc_link = &uctx_main;
-        makecontext(dispatcher_requests[cpu_nr].cont, generic_work, 0);
+        //dispatcher_requests[cpu_nr].cont->uc_link = &uctx_main;
+        //makecontext(dispatcher_requests[cpu_nr].cont, generic_work, 0);
 
         //log_info("do_work: calling swapcontext_fast()\n");
-        ret = swapcontext_fast(&uctx_main, dispatcher_requests[cpu_nr].cont);
-        if (ret) {
-            log_err("do_work: failed to swapcontext_fast\n");
-            exit(-1);
-        }
+        //ret = swapcontext_fast(&uctx_main, dispatcher_requests[cpu_nr].cont);
+        //if (ret) {
+        //   log_err("do_work: failed to swapcontext_fast\n");
+        //    exit(-1);
+        //}
         //log_info("do_work: swapped back to main context\n");
-        worker_responses[cpu_nr].cont = dispatcher_requests[cpu_nr].cont;
-        worker_responses[cpu_nr].flag = FINISHED;
-        end64 = rdtsc();
-        foo[i] = (end64 - start64) / 2.8;
-        start64 = end64;
-    }
+        //worker_responses[cpu_nr].cont = dispatcher_requests[cpu_nr].cont;
+        //worker_responses[cpu_nr].flag = FINISHED;
+        //end64 = rdtsc();
+        //foo[i] = (end64 - start64) / 2.8;
+        //start64 = end64;
+    }*/
 
+    /*
     if (cpu_nr == 1) {
         for (i = 0; i < 100000; i++) {
             printf("%lu\n", foo[i]);
         }
-    }
+    }*/
     /*
     log_info("do_work: starting benchmarking...\n");
     clock_gettime(CLOCK_MONOTONIC, &start);

@@ -23,16 +23,19 @@ struct mempool task_mempool __attribute((aligned(64)));
 struct worker_response
 {
         uint64_t flag;
-        ucontext_t * cont;
-        char make_it_64_bytes[48];
+        void * rnbl;
+        uint64_t timestamp;
+        uint8_t type;
+        char make_it_64_bytes[39];
 } __attribute__((packed, aligned(64)));
 
 struct dispatcher_request
 {
         uint64_t flag;
-        uint64_t type;
-        ucontext_t * cont;
-        char make_it_64_bytes[40];
+        void * rnbl;
+        uint8_t type;
+        uint64_t timestamp;
+        char make_it_64_bytes[39];
 } __attribute__((packed, aligned(64)));
 
 struct networker_pointers_t
@@ -96,9 +99,10 @@ static inline void tskq_enqueue_tail(struct task_queue * tq, void * rnbl,
 static inline void tskq_dequeue(struct task_queue * tq, void ** rnbl_ptr,
                                 uint8_t *type, uint64_t *timestamp)
 {
-        if (tq->head == NULL)
+        if (tq->head == NULL) {
+                (*rnbl_ptr) = NULL;
                 return;
-
+        }
         (*rnbl_ptr) = tq->head;
         (*type) = tq->head->type;
         (*timestamp) = tq->head->timestamp;
@@ -110,5 +114,5 @@ static inline void tskq_dequeue(struct task_queue * tq, void ** rnbl_ptr,
 }
 
 volatile struct networker_pointers_t networker_pointers;
-volatile struct worker_response worker_responses[MAX_WORKERS + 1];
-volatile struct dispatcher_request dispatcher_requests[MAX_WORKERS + 1];
+volatile struct worker_response worker_responses[MAX_WORKERS];
+volatile struct dispatcher_request dispatcher_requests[MAX_WORKERS];

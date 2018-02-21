@@ -37,7 +37,7 @@ void do_dispatching(void)
         int i;
 
         //FIXME Remove these when done testing
-        void * rnbl;
+        void * rnbl = NULL;
         uint8_t type = 0xFF;
         uint64_t timestamp = 0;
 
@@ -46,9 +46,21 @@ void do_dispatching(void)
                         for (i = 0; i < networker_pointers.cnt; i++)
                                 tskq_enqueue_tail(&tskq, (void *)networker_pointers.pkts[i],
                                                   PACKET, networker_pointers.pkts[i]->timestamp);
-                        tskq_dequeue(&tskq, &rnbl, &type, &timestamp);
-                        log_info("Dequeued task with type %d and timestamp %lu\n", type, timestamp);
+                        log_info("Got %d packets\n", networker_pointers.cnt);
                         networker_pointers.cnt = 0;
                 }
+                for (i = 0; i < MAX_WORKERS; i++) {
+                        if (worker_responses[i].flag != RUNNING) {
+                                tskq_dequeue(&tskq, &rnbl, &type, &timestamp);
+                                if (!rnbl)
+                                    break;
+                                worker_responses[i].flag = RUNNING;
+                                dispatcher_requests[i].rnbl = rnbl;
+                                dispatcher_requests[i].type = type;
+                                dispatcher_requests[i].timestamp = timestamp;
+                                dispatcher_requests[i].flag = ACTIVE;
+                        }
+                }
+
         }
 }
