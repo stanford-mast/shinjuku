@@ -43,7 +43,7 @@
 #include <ix/log.h>
 #include <asm/cpu.h>
 #include <ix/context.h>
-#include <ix/delegation.h>
+#include <ix/dispatch.h>
 
 __thread ucontext_t uctx_main;
 ucontext_t uctx;

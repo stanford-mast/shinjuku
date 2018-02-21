@@ -46,7 +46,7 @@
 #include <ix/log.h>
 #include <ix/drivers.h>
 #include <ix/context.h>
-#include <ix/delegation.h>
+#include <ix/dispatch.h>
 
 #include <asm/cpu.h>
 
@@ -83,7 +83,7 @@ extern int cp_init(void);
 extern int mempool_init(void);
 extern int init_migration_cpu(void);
 extern int dpdk_init(void);
-extern int context_init(void);
+extern int taskqueue_init(void);
 extern void do_work(void);
 extern void do_networking(void);
 extern void do_dispatching(void);
@@ -109,7 +109,7 @@ static struct init_vector_t init_tbl[] = {
 	{ "dpdk",    dpdk_init,    NULL, NULL},
 	{ "firstcpu", init_firstcpu, NULL, NULL},             // after cfg
 	{ "mbuf",    mbuf_init,    mbuf_init_cpu, NULL},      // after firstcpu
-	{ "context", context_init, NULL, NULL},      // after firstcpu
+	{ "taskqueue", taskqueue_init, NULL, NULL},      // after firstcpu
 	{ "memp",    memp_init,    memp_init_cpu, NULL},
 	{ "tcpapi",  tcp_api_init, tcp_api_init_cpu, NULL},
 	{ "migration", NULL, init_migration_cpu, NULL},
@@ -459,7 +459,7 @@ int main(int argc, char *argv[])
         while (worker_responses[0].flag == RUNNING);
         context_free(worker_responses[0].cont, &context_pool, &stack_pool);
         */
-
+        /*
     uint64_t foo[100000];
     int flag = 0;
     //clock_gettime(CLOCK_MONOTONIC, &start);
@@ -479,7 +479,7 @@ int main(int argc, char *argv[])
                 //end64 = rdtscp(NULL);
                 //foo[i++] = (end64 - start64) / 2.8;
             }
-        }
+        }*/
         //log_info("main: sent context to worker core\n");
 
         // Measure context allocation and free time.
@@ -488,22 +488,22 @@ int main(int argc, char *argv[])
         context_free(dispatcher_requests[0].cont, &context_pool, &stack_pool);
         */
 
-        end64 = rdtscp(NULL);
+        //end64 = rdtscp(NULL);
         //if (flag)
-        foo[i++] = (end64 - start64) / 2.8;
+        //foo[i++] = (end64 - start64) / 2.8;
 
         //flag = 0;
         //log_info("main: context full time: %lu ns\n",
         //     (end64 - start64) / 2.8);
-    }
+    //}
     //clock_gettime(CLOCK_MONOTONIC, &end);
     //start64 = 10e9 * start.tv_sec + start.tv_nsec;
     //end64 = 10e9 * end.tv_sec + end.tv_nsec;
     //log_info("main: average context allocation time: %lu ns\n",
     //        (end64 - start64) / 100000);
-    for (i = 0; i < 100000; i++) {
-        printf("%lu\n", foo[i]);
-    }
+    //for (i = 0; i < 100000; i++) {
+    //    printf("%lu\n", foo[i]);
+    //}
     /*
     log_info("main: starting benchmarking...\n");
     clock_gettime(CLOCK_MONOTONIC, &start);

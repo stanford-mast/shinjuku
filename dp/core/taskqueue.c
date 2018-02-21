@@ -21,29 +21,42 @@
  */
 
 /*
- * networker.c - networking core functionality
- *
- * A single core is responsible for receiving all network packets in the
- * system and forwading them to the dispatcher.
+ * taskqueue.c - taskqueue management
  */
 
-#include <ix/ethqueue.h>
+#include <ix/mem.h>
+#include <ix/stddef.h>
+#include <ix/mempool.h>
 #include <ix/dispatch.h>
 
-/**
- * do_networking - implements networking core's functionality
- */
-void do_networking(void)
+#define TASK_CAPACITY    (768*1024)
+
+static int task_init_mempool(void)
 {
-        int i, num_recv;
-        while(1) {
-                eth_process_poll();
-                num_recv = eth_process_recv();
-                if (num_recv == 0)
-                        continue;
-                while (networker_pointers.cnt != 0);
-                for (i = 0; i < num_recv; i++)
-                        networker_pointers.pkts[i] = recv_mbufs[i];
-                networker_pointers.cnt = num_recv;
+	struct mempool *m = &task_mempool;
+	return mempool_create(m, &task_datastore, MEMPOOL_SANITY_GLOBAL, 0);
+}
+
+/**
+ * taskqueue_init - allocate global task mempool
+ *
+ * Returns 0 if successful, otherwise failure.
+ */
+
+int taskqueue_init(void)
+{
+	int ret;
+	struct mempool_datastore *t = &task_datastore;
+
+	ret = mempool_create_datastore(t, TASK_CAPACITY, sizeof(struct task),
+                                       1, MEMPOOL_DEFAULT_CHUNKSIZE, "task");
+	if (ret) {
+		return ret;
+	}
+
+        ret = task_init_mempool();
+        if (ret) {
+                return ret;
         }
+        return 0;
 }

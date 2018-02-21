@@ -27,7 +27,7 @@
  * core and dispatching these packets or contexts to the worker cores.
  */
 
-#include <ix/delegation.h>
+#include <ix/dispatch.h>
 
 /**
  * do_dispatching - implements dispatcher core's main loop
@@ -36,11 +36,18 @@ void do_dispatching(void)
 {
         int i;
 
+        //FIXME Remove these when done testing
+        void * rnbl;
+        uint8_t type = 0xFF;
+        uint64_t timestamp = 0;
+
         while(1) {
                 if (networker_pointers.cnt != 0) {
                         for (i = 0; i < networker_pointers.cnt; i++)
-                                log_info("Got packet with timestamp %lu\n",
-                                         networker_pointers.pkts[i]->timestamp);
+                                tskq_enqueue_tail(&tskq, (void *)networker_pointers.pkts[i],
+                                                  PACKET, networker_pointers.pkts[i]->timestamp);
+                        tskq_dequeue(&tskq, &rnbl, &type, &timestamp);
+                        log_info("Dequeued task with type %d and timestamp %lu\n", type, timestamp);
                         networker_pointers.cnt = 0;
                 }
         }
