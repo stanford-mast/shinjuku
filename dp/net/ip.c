@@ -75,7 +75,7 @@ static int ip_input(struct eth_fg *cur_fg, struct mbuf *pkt, struct ip_hdr *hdr)
         addr.addr = ntoh32(hdr->dst_addr.addr);
         ip_addr_to_str(&addr, dst);
 
-        log_info("ip: got IP packet from '%s' to '%s' with timestamp %lu\n", src, dst, pkt->timestamp);
+        //log_info("ip: got IP packet from '%s' to '%s' with timestamp %lu\n", src, dst, pkt->timestamp);
 
 	/* check that the packet is long enough */
 	if (!mbuf_enough_space(pkt, hdr, sizeof(struct ip_hdr)))
@@ -141,7 +141,7 @@ int eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt)
 
 	measure_ctx.received_total += pkt->len;
 	measure_ctx.packets_total += 1;
-	if (measure_ctx.packets_total > 100000000) {
+	if (measure_ctx.packets_total > 10000000) {
 	    measure_ctx.packets_total = 0;
 	    clock_gettime(CLOCK_MONOTONIC, &now);
 	    printf("Time %lu sec, %ld nsec\n",

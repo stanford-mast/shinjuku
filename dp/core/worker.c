@@ -83,8 +83,8 @@ void do_work(void)
     uint64_t start64, end64;
     int i;
     int ret;
-        int cpu_nr_ = percpu_get(cpu_nr);
-        log_info("do_work: cpu_nr = %d\n", cpu_nr_);
+        int cpu_nr_ = percpu_get(cpu_nr) - 2;
+        log_info("do_work: worker number = %d\n", cpu_nr_);
         worker_responses[cpu_nr_].flag = FINISHED;
     uint64_t foo[100000];
 
@@ -97,9 +97,6 @@ void do_work(void)
         while (1) {
                 while (dispatcher_requests[cpu_nr_].flag == WAITING);
                 dispatcher_requests[cpu_nr_].flag = WAITING;
-                log_info("Dequeued task with type %d and timestamp %lu\n",
-                         dispatcher_requests[cpu_nr_].type,
-                         dispatcher_requests[cpu_nr_].timestamp);
                 worker_responses[cpu_nr_].flag = FINISHED;
         }
     /*

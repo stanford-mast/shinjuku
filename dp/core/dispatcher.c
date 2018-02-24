@@ -32,7 +32,7 @@
 /**
  * do_dispatching - implements dispatcher core's main loop
  */
-void do_dispatching(void)
+void do_dispatching(int num_cpus)
 {
         int i;
 
@@ -42,25 +42,35 @@ void do_dispatching(void)
         uint64_t timestamp = 0;
 
         while(1) {
-                if (networker_pointers.cnt != 0) {
-                        for (i = 0; i < networker_pointers.cnt; i++)
-                                tskq_enqueue_tail(&tskq, (void *)networker_pointers.pkts[i],
-                                                  PACKET, networker_pointers.pkts[i]->timestamp);
-                        log_info("Got %d packets\n", networker_pointers.cnt);
-                        networker_pointers.cnt = 0;
-                }
-                for (i = 0; i < MAX_WORKERS; i++) {
+                for (i = 0; i < num_cpus - 2; i++) {
                         if (worker_responses[i].flag != RUNNING) {
                                 tskq_dequeue(&tskq, &rnbl, &type, &timestamp);
                                 if (!rnbl)
                                     break;
                                 worker_responses[i].flag = RUNNING;
+                                mbuf_enqueue(&mqueue, (struct mbuf *) dispatcher_requests[i].rnbl);
+                                if (dispatcher_requests[i].rnbl)
+                                         ((struct mbuf *)dispatcher_requests[i].rnbl)->timestamp;
                                 dispatcher_requests[i].rnbl = rnbl;
                                 dispatcher_requests[i].type = type;
                                 dispatcher_requests[i].timestamp = timestamp;
                                 dispatcher_requests[i].flag = ACTIVE;
                         }
                 }
-
+                if (networker_pointers.cnt != 0) {
+                        for (i = 0; i < networker_pointers.cnt; i++) {
+                                tskq_enqueue_tail(&tskq, (void *)networker_pointers.pkts[i],
+                                                  PACKET, networker_pointers.pkts[i]->timestamp);
+                        }
+                        // FIXME return here even if network_pointers.cnt is 0
+                        for (i = 0; i < ETH_RX_MAX_BATCH; i++) {
+                                struct mbuf * buf = mbuf_dequeue(&mqueue);
+                                if (!buf)
+                                    break;
+                                networker_pointers.pkts[i] = buf;
+                                networker_pointers.free_cnt++;
+                        }
+                        networker_pointers.cnt = 0;
+                }
         }
 }

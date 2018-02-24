@@ -30,11 +30,18 @@
 #include <ix/dispatch.h>
 
 #define TASK_CAPACITY    (768*1024)
+#define MCELL_CAPACITY   (768*1024)
 
 static int task_init_mempool(void)
 {
 	struct mempool *m = &task_mempool;
 	return mempool_create(m, &task_datastore, MEMPOOL_SANITY_GLOBAL, 0);
+}
+
+static int mcell_init_mempool(void)
+{
+	struct mempool *m = &mcell_mempool;
+	return mempool_create(m, &mcell_datastore, MEMPOOL_SANITY_GLOBAL, 0);
 }
 
 /**
@@ -47,6 +54,7 @@ int taskqueue_init(void)
 {
 	int ret;
 	struct mempool_datastore *t = &task_datastore;
+	struct mempool_datastore *m = &mcell_datastore;
 
 	ret = mempool_create_datastore(t, TASK_CAPACITY, sizeof(struct task),
                                        1, MEMPOOL_DEFAULT_CHUNKSIZE, "task");
@@ -55,6 +63,17 @@ int taskqueue_init(void)
 	}
 
         ret = task_init_mempool();
+        if (ret) {
+                return ret;
+        }
+
+	ret = mempool_create_datastore(m, MCELL_CAPACITY, sizeof(struct mbuf_cell),
+                                       1, MEMPOOL_DEFAULT_CHUNKSIZE, "mcell");
+	if (ret) {
+		return ret;
+	}
+
+        ret = mcell_init_mempool();
         if (ret) {
                 return ret;
         }

@@ -86,7 +86,7 @@ extern int dpdk_init(void);
 extern int taskqueue_init(void);
 extern void do_work(void);
 extern void do_networking(void);
-extern void do_dispatching(void);
+extern void do_dispatching(int num_cpus);
 
 extern struct mempool context_pool;
 extern struct mempool stack_pool;
@@ -420,7 +420,7 @@ int main(int argc, char *argv[])
         }
         log_info("init done\n");
 
-        do_dispatching();
+        do_dispatching(CFG.num_cpus);
         // Waiting for one context to be executed so that both dispatcher and
         // worker are ready.
         

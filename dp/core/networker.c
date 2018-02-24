@@ -42,6 +42,10 @@ void do_networking(void)
                 if (num_recv == 0)
                         continue;
                 while (networker_pointers.cnt != 0);
+                for (i = 0; i < networker_pointers.free_cnt; i++) {
+                        mbuf_free(networker_pointers.pkts[i]);
+                }
+                networker_pointers.free_cnt = 0;
                 for (i = 0; i < num_recv; i++)
                         networker_pointers.pkts[i] = recv_mbufs[i];
                 networker_pointers.cnt = num_recv;
