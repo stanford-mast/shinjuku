@@ -41,9 +41,14 @@
 
 #include <ix/cpu.h>
 #include <ix/log.h>
+#include <ix/mbuf.h>
 #include <asm/cpu.h>
 #include <ix/context.h>
 #include <ix/dispatch.h>
+
+#include <net/ip.h>
+#include <net/udp.h>
+#include <net/ethernet.h>
 
 __thread ucontext_t uctx_main;
 ucontext_t uctx;
@@ -75,30 +80,71 @@ static ucontext_t * get_work(ucontext_t * fini_uctx)
     return fini_uctx;
 }
 
+static void parse_packet(struct mbuf * pkt, void ** data_ptr,
+                         struct ip_tuple ** id_ptr)
+{
+        // Quickly parse packet without doing checks
+        struct eth_hdr * ethhdr = mbuf_mtod(pkt, struct eth_hdr *);
+        struct ip_hdr *  iphdr = mbuf_nextd(ethhdr, struct ip_hdr *);
+        int hdrlen = iphdr->header_len * sizeof(uint32_t);
+        struct udp_hdr * udphdr = mbuf_nextd_off(iphdr, struct udp_hdr *,
+                                                 hdrlen);
+        // Get data and udp header
+        (*data_ptr) = mbuf_nextd(udphdr, void *);
+        uint16_t len = ntoh16(udphdr->len);
+
+        if (unlikely(!mbuf_enough_space(pkt, udphdr, len))) {
+                (*data_ptr) = NULL;
+                return;
+        }
+
+        (*id_ptr) = mbuf_mtod(pkt, struct ip_tuple *);
+        (*id_ptr)->src_ip = ntoh32(iphdr->src_addr.addr);
+        (*id_ptr)->dst_ip = ntoh32(iphdr->dst_addr.addr);
+        (*id_ptr)->src_port = ntoh16(udphdr->src_port);
+        (*id_ptr)->dst_port = ntoh16(udphdr->dst_port);
+        pkt->done = (void *) 0xDEADBEEF;
+}
+
+struct request {
+        uint64_t id;
+        uint64_t genNs;
+};
+
+static void handle_request(struct mbuf * pkt, void * data, struct ip_tuple *id)
+{
+        log_info("Source port: %d, Dest. port: %d\n", id->src_port, id->dst_port);
+        if (id->dst_port == 1234) {
+                struct request * req = (struct request *)data;
+                log_info("Request id: %lu\n", req->id);
+        }
+}
+
 void do_work(void)
 {
-    log_info("do_work: starting...\n");
-    // FIXME Remove these after benchmarking finishes
-    struct timespec start, end;
-    uint64_t start64, end64;
-    int i;
-    int ret;
-        int cpu_nr_ = percpu_get(cpu_nr) - 2;
-        log_info("do_work: worker number = %d\n", cpu_nr_);
-        worker_responses[cpu_nr_].flag = FINISHED;
-    uint64_t foo[100000];
+        // FIXME Remove these after benchmarking finishes
+        struct timespec start, end;
+        uint64_t start64, end64;
+        int ret;
+        struct mbuf * pkt;
+        void * data;
+        struct ip_tuple * id;
 
-    /*
-    if (cpu_nr != 1)
-        while(1);
-    */
+        int cpu_nr_ = percpu_get(cpu_nr) - 2;
+        worker_responses[cpu_nr_].flag = FINISHED;
 
         log_info("do_work: Waiting for dispatcher work\n");
         while (1) {
                 while (dispatcher_requests[cpu_nr_].flag == WAITING);
                 dispatcher_requests[cpu_nr_].flag = WAITING;
+                pkt = (struct mbuf *) dispatcher_requests[cpu_nr_].rnbl;
+                parse_packet(pkt, &data, &id);
+                if (data) {
+                        handle_request(pkt, data, id);
+                }
                 worker_responses[cpu_nr_].flag = FINISHED;
         }
+
     /*
     for(i = 0; i < 100000; i++) {
         while (dispatcher_requests[cpu_nr].flag == WAITING);
