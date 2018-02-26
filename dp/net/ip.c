@@ -66,17 +66,6 @@ static int ip_input(struct eth_fg *cur_fg, struct mbuf *pkt, struct ip_hdr *hdr)
 {
 	int hdrlen, pktlen;
 
-        struct ip_addr addr;
-        char src[IP_ADDR_STR_LEN];
-        char dst[IP_ADDR_STR_LEN];
-
-        addr.addr = ntoh32(hdr->src_addr.addr);
-        ip_addr_to_str(&addr, src);
-        addr.addr = ntoh32(hdr->dst_addr.addr);
-        ip_addr_to_str(&addr, dst);
-
-        //log_info("ip: got IP packet from '%s' to '%s' with timestamp %lu\n", src, dst, pkt->timestamp);
-
 	/* check that the packet is long enough */
 	if (!mbuf_enough_space(pkt, hdr, sizeof(struct ip_hdr)))
 		goto out;
@@ -104,7 +93,7 @@ static int ip_input(struct eth_fg *cur_fg, struct mbuf *pkt, struct ip_hdr *hdr)
 
 	switch (hdr->proto) {
 	case IPPROTO_TCP:
-                log_warn("ip: dropping TCP packet\n");
+                log_debug("ip: dropping TCP packet\n");
                 goto out;
 	case IPPROTO_UDP:
                 return 0;
@@ -152,7 +141,7 @@ int eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt)
 	}
 
 	if (ethhdr->type == hton16(ETHTYPE_IP))
-		return ip_input(NULL, pkt, mbuf_nextd(ethhdr, struct ip_hdr *));
+                return ip_input(NULL, pkt, mbuf_nextd(ethhdr, struct ip_hdr *));
 	else {
 		mbuf_free(pkt);
                 return -1;

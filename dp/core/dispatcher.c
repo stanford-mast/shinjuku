@@ -49,8 +49,6 @@ void do_dispatching(int num_cpus)
                                     break;
                                 worker_responses[i].flag = RUNNING;
                                 mbuf_enqueue(&mqueue, (struct mbuf *) dispatcher_requests[i].rnbl);
-                                if (dispatcher_requests[i].rnbl)
-                                         ((struct mbuf *)dispatcher_requests[i].rnbl)->timestamp;
                                 dispatcher_requests[i].rnbl = rnbl;
                                 dispatcher_requests[i].type = type;
                                 dispatcher_requests[i].timestamp = timestamp;

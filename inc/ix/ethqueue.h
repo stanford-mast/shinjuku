@@ -109,7 +109,8 @@ static inline int eth_process_recv_queue(struct eth_rx_queue *rxq, struct mbuf *
         return eth_input(rxq, *pos_p);
 }
 
-/** eth_process_recv - retrieves pending received packets
+/**
+ * eth_process_recv - retrieves pending received packets
  *
  * Returns true if there are are no remaining packets.
  */
