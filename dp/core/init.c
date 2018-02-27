@@ -72,6 +72,7 @@ static int init_firstcpu(void);
 static int init_hw(void);
 static int init_network_cpu(void);
 static int init_ethdev(void);
+static int init_tx_queues(void);
 
 extern int net_init(void);
 extern int tcp_api_init(void);
@@ -116,6 +117,8 @@ static struct init_vector_t init_tbl[] = {
 	{ "tcpapi",  tcp_api_init, tcp_api_init_cpu, NULL},
 	{ "migration", NULL, init_migration_cpu, NULL},
 	{ "response", response_init, response_init_cpu, NULL},
+        { "ethdev", init_ethdev, NULL, NULL},
+        { "tx_queue", NULL, init_tx_queues, NULL},
 	{ "hw",      init_hw,      NULL, NULL},               // spaws per-cpu init sequence
 	{ "syscall", NULL,         syscall_init_cpu, NULL},
 #ifdef ENABLE_KSTATS
@@ -206,7 +209,25 @@ err:
 	return ret;
 }
 
-static int init_network_cpu(void)
+static int init_tx_queues(void)
+{
+	int ret, i;
+	ret = 0;
+	for (i = 0; i < eth_dev_count; i++) {
+		struct ix_rte_eth_dev *eth = eth_dev[i];
+
+		ret = eth_dev_get_tx_queue(eth, &percpu_get(eth_txqs[i]));
+		if (ret) {
+			return ret;
+		}
+	}
+
+	percpu_get(eth_num_queues) = eth_dev_count;
+
+        return 0;
+}
+
+static int init_rx_queue(void)
 {
 	int ret, i;
 	ret = 0;
@@ -216,13 +237,15 @@ static int init_network_cpu(void)
 		if (ret) {
 			return ret;
 		}
-
-		ret = eth_dev_get_tx_queue(eth, &percpu_get(eth_txqs[i]));
-		if (ret) {
-			return ret;
-		}
 	}
 
+        return 0;
+}
+
+static int init_network_cpu(void)
+{
+	int ret, i;
+	ret = 0;
 	for (i = 0; i < CFG.num_ethdev; i++) {
 		struct ix_rte_eth_dev *eth = eth_dev[i];
 
@@ -235,8 +258,6 @@ static int init_network_cpu(void)
 			return ret;
 		}
         }
-
-	percpu_get(eth_num_queues) = eth_dev_count;
 
         networker_pointers.cnt = 0;
 
@@ -299,17 +320,23 @@ void *start_cpu(void *arg)
 
         log_info("start_cpu: starting cpu-specific work\n");
         if (cpu_nr_ == 1) {
-                ret = init_ethdev();
+                ret = init_rx_queue();
                 if (ret) {
-                        log_err("init: failed to initialize ethernet device\n");
+                        log_err("init: failed to initialize RX queue\n");
                         exit(ret);
                 }
+
+	        started_cpus++;
+
+                // Wait until all TX queues are set up before starting ethernet
+                // device.
+                while (started_cpus != CFG.num_cpus - 1);
+
                 ret = init_network_cpu();
                 if (ret) {
                         log_err("init: failed to initialize network cpu\n");
                         exit(ret);
                 }
-	        started_cpus++;
 	        pthread_barrier_wait(&start_barrier);
                 do_networking();
         } else {
