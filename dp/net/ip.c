@@ -35,6 +35,7 @@
 #include <ix/log.h>
 #include <ix/cfg.h>
 #include <ix/control_plane.h>
+#include <ix/transmit.h>
 
 #include <asm/chksum.h>
 

@@ -60,30 +60,5 @@ struct eth_ctx {
 	struct timespec prev;
 };
 
-/**
- * ip_setup_header - outputs a typical IP header
- * @iphdr: a pointer to the header
- * @proto: the protocol
- * @saddr: the source address
- * @daddr: the destination address
- * @l4len: the length of the L4 (e.g. UDP or TCP) header and data.
- */
-static inline void ip_setup_header(struct ip_hdr *iphdr, uint8_t proto,
-				   uint32_t saddr, uint32_t daddr,
-				   uint16_t l4len)
-{
-	iphdr->header_len = sizeof(struct ip_hdr) / 4;
-	iphdr->version = 4;
-	iphdr->tos = 0;
-	iphdr->len = hton16(sizeof(struct ip_hdr) + l4len);
-	iphdr->id = 0;
-	iphdr->off = 0;
-	iphdr->ttl = 64;
-	iphdr->proto = proto;
-	iphdr->chksum = 0;
-	iphdr->src_addr.addr = hton32(saddr);
-	iphdr->dst_addr.addr = hton32(daddr);
-}
-
 int ip_send_one(struct eth_fg *cur_fg, struct ip_addr *dst_addr, struct mbuf *pkt, size_t len);
 int arp_add_pending_pkt(struct ip_addr *dst_addr, struct eth_fg *fg, struct mbuf *mbuf, size_t len);

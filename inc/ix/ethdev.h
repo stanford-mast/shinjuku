@@ -1039,4 +1039,3 @@ extern int eth_dev_get_tx_queue(struct ix_rte_eth_dev *dev, struct eth_tx_queue 
 
 extern int eth_dev_count;
 extern struct ix_rte_eth_dev *eth_dev[];
-

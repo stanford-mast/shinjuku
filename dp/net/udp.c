@@ -35,6 +35,7 @@
 #include <ix/kstats.h>
 #include <ix/cfg.h>
 #include <ix/mempool.h>
+#include <ix/transmit.h>
 #include <ix/networker.h>
 #include <asm/chksum.h>
 
@@ -42,14 +43,6 @@
 #include <net/udp.h>
 
 #include "net.h"
-
-#define UDP_PKT_SIZE		  \
-	(sizeof(struct eth_hdr) + \
-	 sizeof(struct ip_hdr)  + \
-	 sizeof(struct udp_hdr))
-
-#define UDP_MAX_LEN \
-	(ETH_MTU - sizeof(struct ip_hdr) - sizeof(struct udp_hdr))
 
 void udp_input(struct mbuf *pkt, struct ip_hdr *iphdr, struct udp_hdr *udphdr)
 {
@@ -89,17 +82,6 @@ void udp_input(struct mbuf *pkt, struct ip_hdr *iphdr, struct udp_hdr *udphdr)
         serve(data, len, id);
         //FIXME We do not need to notify userspace here.
 	//usys_udp_recv(mbuf_to_iomap(pkt, data), len, mbuf_to_iomap(pkt, id));
-}
-
-static void udp_mbuf_done(struct mbuf *pkt)
-{
-	int i;
-
-	for (i = 0; i < pkt->nr_iov; i++)
-		mbuf_iov_free(&pkt->iovs[i]);
-
-	usys_udp_sent(pkt->done_data);
-	mbuf_free(pkt);
 }
 
 static int udp_output(struct mbuf *__restrict pkt,

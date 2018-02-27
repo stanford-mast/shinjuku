@@ -67,3 +67,4 @@ enum {
 	ARP_OP_REVREPLY = 4,	/* response protocol addr given hw addr */
 };
 
+extern int arp_lookup_mac(struct ip_addr *addr, struct eth_addr *mac);

@@ -29,6 +29,14 @@
 
 #include <ix/types.h>
 
+#define UDP_PKT_SIZE              \
+        (sizeof(struct eth_hdr) + \
+         sizeof(struct ip_hdr)  + \
+         sizeof(struct udp_hdr))
+
+#define UDP_MAX_LEN \
+        (ETH_MTU - sizeof(struct ip_hdr) - sizeof(struct udp_hdr))
+
 struct udp_hdr {
 	uint16_t src_port;
 	uint16_t dst_port;
