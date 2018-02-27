@@ -84,6 +84,8 @@ extern int mempool_init(void);
 extern int init_migration_cpu(void);
 extern int dpdk_init(void);
 extern int taskqueue_init(void);
+extern int response_init(void);
+extern int response_init_cpu(void);
 extern void do_work(void);
 extern void do_networking(void);
 extern void do_dispatching(int num_cpus);
@@ -113,6 +115,7 @@ static struct init_vector_t init_tbl[] = {
 	{ "memp",    memp_init,    memp_init_cpu, NULL},
 	{ "tcpapi",  tcp_api_init, tcp_api_init_cpu, NULL},
 	{ "migration", NULL, init_migration_cpu, NULL},
+	{ "response", response_init, response_init_cpu, NULL},
 	{ "hw",      init_hw,      NULL, NULL},               // spaws per-cpu init sequence
 	{ "syscall", NULL,         syscall_init_cpu, NULL},
 #ifdef ENABLE_KSTATS

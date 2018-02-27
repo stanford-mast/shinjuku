@@ -45,6 +45,7 @@
 #include <asm/cpu.h>
 #include <ix/context.h>
 #include <ix/dispatch.h>
+#include <ix/transmit.h>
 
 #include <net/ip.h>
 #include <net/udp.h>
@@ -56,8 +57,42 @@ ucontext_t uctx;
 //FIXME Remove stack from here when integrated with ffwd
 char uctx_stack[16384];
 
+DEFINE_PERCPU(struct mempool, response_pool __attribute__((aligned(64))));
+
+
 extern int getcontext_fast(ucontext_t *ucp);
 extern int swapcontext_fast(ucontext_t *ouctx, ucontext_t *uctx);
+
+struct response {
+        uint64_t id;
+        uint64_t genNs;
+};
+
+struct request {
+        uint64_t id;
+        uint64_t genNs;
+};
+
+/**
+ * response_init - allocates global response datastore
+ */
+int response_init(void)
+{
+        return mempool_create_datastore(&response_datastore, 128000,
+                                        sizeof(struct response), 1,
+                                        MEMPOOL_DEFAULT_CHUNKSIZE,
+                                        "response");
+}
+
+/**
+ * response_init_cpu - allocates per cpu response mempools
+ */
+int response_init_cpu(void)
+{
+        struct mempool *m = &percpu_get(response_pool);
+        return mempool_create(m, &response_datastore, MEMPOOL_SANITY_PERCPU,
+                              percpu_get(cpu_id));
+}
 
 static void generic_work(void){
     int ret;
@@ -105,11 +140,6 @@ static void parse_packet(struct mbuf * pkt, void ** data_ptr,
         (*id_ptr)->dst_port = ntoh16(udphdr->dst_port);
         pkt->done = (void *) 0xDEADBEEF;
 }
-
-struct request {
-        uint64_t id;
-        uint64_t genNs;
-};
 
 static void handle_request(struct mbuf * pkt, void * data, struct ip_tuple *id)
 {

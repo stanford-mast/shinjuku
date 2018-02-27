@@ -60,20 +60,6 @@ void do_networking(void)
         //FIXME REMOVE THIS
         void * data;
         struct ip_tuple * id;
-        int ret = mempool_create_datastore(&response_datastore, 128000,
-                                           sizeof(struct response),
-                                           1, MEMPOOL_DEFAULT_CHUNKSIZE,
-                                           "response");
-        if (ret) {
-                log_err("unable to create mempool datastore\n");
-                exit(-1);
-        }
-
-        ret = mempool_create(&response_pool, &response_datastore, MEMPOOL_SANITY_GLOBAL, 0);
-        if (ret) {
-                log_err("unable to create mempool\n");
-                exit(-1);
-        }
         // -------------------------------------------
                 
         int i, num_recv;
@@ -114,7 +100,7 @@ void do_networking(void)
                                 continue;
                         }
 
-                        struct response * resp = mempool_alloc(&response_pool);
+                        struct response * resp = mempool_alloc(&percpu_get(response_pool));
                         resp->genNs = ((struct request *)data)->genNs;
                         struct ip_tuple new_id = {
                                 .src_ip = id->dst_ip,

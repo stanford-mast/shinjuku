@@ -26,6 +26,7 @@
 
 #pragma once
 
+#include <ix/cfg.h>
 #include <ix/log.h>
 #include <ix/mbuf.h>
 #include <ix/ethdev.h>
@@ -61,7 +62,7 @@ static inline void ip_setup_header(struct ip_hdr *iphdr, uint8_t proto,
         iphdr->dst_addr.addr = hton32(daddr);
 }
 
-struct mempool response_pool;
+DECLARE_PERCPU(struct mempool, response_pool);
 struct mempool_datastore response_datastore;
 
 /**
@@ -74,7 +75,7 @@ static inline void udp_mbuf_done(struct mbuf * pkt)
         for (i = 0; i < pkt->nr_iov; i++)
                 mbuf_iov_free(&pkt->iovs[i]);
 
-        mempool_free(&response_pool, (void *)pkt->done_data);
+        mempool_free(&percpu_get(response_pool), (void *)pkt->done_data);
         mbuf_free(pkt);
 }
 
