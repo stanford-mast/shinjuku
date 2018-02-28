@@ -129,6 +129,7 @@ static void parse_packet(struct mbuf * pkt, void ** data_ptr,
         uint16_t len = ntoh16(udphdr->len);
 
         if (unlikely(!mbuf_enough_space(pkt, udphdr, len))) {
+                log_warn("worker: not enough space in mbuf\n");
                 (*data_ptr) = NULL;
                 return;
         }
@@ -139,15 +140,9 @@ static void parse_packet(struct mbuf * pkt, void ** data_ptr,
         (*id_ptr)->src_port = ntoh16(udphdr->src_port);
         (*id_ptr)->dst_port = ntoh16(udphdr->dst_port);
         pkt->done = (void *) 0xDEADBEEF;
-}
 
-static void handle_request(struct mbuf * pkt, void * data, struct ip_tuple *id)
-{
-        log_info("Source port: %d, Dest. port: %d\n", id->src_port, id->dst_port);
-        if (id->dst_port == 1234) {
-                struct request * req = (struct request *)data;
-                log_info("Request id: %lu\n", req->id);
-        }
+        if ((*id_ptr)->dst_port != 1234)
+                (*data_ptr) = NULL;
 }
 
 void do_work(void)
@@ -165,13 +160,31 @@ void do_work(void)
 
         log_info("do_work: Waiting for dispatcher work\n");
         while (1) {
+                eth_process_reclaim();
                 while (dispatcher_requests[cpu_nr_].flag == WAITING);
                 dispatcher_requests[cpu_nr_].flag = WAITING;
                 pkt = (struct mbuf *) dispatcher_requests[cpu_nr_].rnbl;
                 parse_packet(pkt, &data, &id);
                 if (data) {
-                        handle_request(pkt, data, id);
+                        struct response * resp = mempool_alloc(&percpu_get(response_pool));
+                        if (!resp) {
+                                log_warn("Cannot allocate response buffer\n");
+                                goto end;
+                        }
+                        resp->genNs = ((struct request *)data)->genNs;
+                        struct ip_tuple new_id = {
+                                .src_ip = id->dst_ip,
+                                .dst_ip = id->src_ip,
+                                .src_port = id->dst_port,
+                                .dst_port = id->src_port
+                        };
+                        ret = udp_send((void *)resp, sizeof(struct response), &new_id,
+                                       (uint64_t) resp);
+                        if (ret)
+                                log_warn("udp_send failed with error %d\n", ret);
+                        eth_process_send();
                 }
+end:
                 worker_responses[cpu_nr_].flag = FINISHED;
         }
 

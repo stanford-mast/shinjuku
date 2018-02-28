@@ -77,6 +77,8 @@ static inline struct mbuf * mbuf_dequeue(struct mbuf_queue * mq)
 
 static inline void mbuf_enqueue(struct mbuf_queue * mq, struct mbuf * buf)
 {
+        if (unlikely(!buf))
+                return;
         struct mbuf_cell * mcell = mempool_alloc(&mcell_mempool);
         mcell->buffer = buf;
         mcell->next = mq->head;
@@ -120,6 +122,8 @@ static inline void tskq_enqueue_tail(struct task_queue * tq, void * rnbl,
                                      uint8_t type, uint64_t timestamp)
 {
         struct task * tsk = mempool_alloc(&task_mempool);
+        if (!tsk)
+                return;
         tsk->runnable = rnbl;
         tsk->type = type;
         tsk->timestamp = timestamp;

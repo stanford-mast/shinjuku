@@ -64,7 +64,7 @@ void do_dispatching(int num_cpus)
                         for (i = 0; i < ETH_RX_MAX_BATCH; i++) {
                                 struct mbuf * buf = mbuf_dequeue(&mqueue);
                                 if (!buf)
-                                    break;
+                                        break;
                                 networker_pointers.pkts[i] = buf;
                                 networker_pointers.free_cnt++;
                         }
