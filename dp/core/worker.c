@@ -51,6 +51,8 @@
 #include <net/udp.h>
 #include <net/ethernet.h>
 
+#define DELAY 0
+
 __thread ucontext_t uctx_main;
 ucontext_t uctx;
 
@@ -178,10 +180,16 @@ void do_work(void)
                                 .src_port = id->dst_port,
                                 .dst_port = id->src_port
                         };
+                        start64 = rdtsc();
+                        do {
+                                end64 = rdtsc();
+                        } while (((end64 - start64) / 2.7) < DELAY);
                         ret = udp_send((void *)resp, sizeof(struct response), &new_id,
                                        (uint64_t) resp);
-                        if (ret)
+                        if (ret) {
                                 log_warn("udp_send failed with error %d\n", ret);
+                                log_warn("Destination IP: %lu\n", new_id.dst_ip);
+                        }
                         eth_process_send();
                 }
 end:
