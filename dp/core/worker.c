@@ -54,7 +54,9 @@
 #define DELAY 0
 
 __thread ucontext_t uctx_main;
+__thread ucontext_t * cont;
 __thread uint8_t sending;
+__thread uint8_t finished;
 
 DEFINE_PERCPU(struct mempool, response_pool __attribute__((aligned(64))));
 
@@ -63,6 +65,7 @@ DECLARE_PERCPU(struct mempool, stack_pool);
 
 extern int getcontext_fast(ucontext_t *ucp);
 extern int swapcontext_fast(ucontext_t *ouctx, ucontext_t *uctx);
+extern int swapcontext_very_fast(ucontext_t *ouctx, ucontext_t *uctx);
 
 struct response {
         uint64_t id;
@@ -113,7 +116,8 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
         struct response * resp = mempool_alloc(&percpu_get(response_pool));
         if (!resp) {
                 log_warn("Cannot allocate response buffer\n");
-                return;
+                finished = 1;
+                swapcontext_very_fast(cont, &uctx_main);
         }
 
         resp->genNs = ((struct request *)data)->genNs;
@@ -135,6 +139,9 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
                        (uint64_t) resp);
         if (ret)
                 log_warn("udp_send failed with error %d\n", ret);
+
+        finished = 1;
+        swapcontext_very_fast(cont, &uctx_main);
 }
 
 static void parse_packet(struct mbuf * pkt, void ** data_ptr,
@@ -179,7 +186,10 @@ void do_work(void)
 
         log_info("do_work: Waiting for dispatcher work\n");
         while (1) {
-                eth_process_reclaim();
+                if (data) {
+                        eth_process_reclaim();
+                        eth_process_send();
+                }
                 while (dispatcher_requests[cpu_nr_].flag == WAITING);
                 dispatcher_requests[cpu_nr_].flag = WAITING;
                 pkt = (struct mbuf *) dispatcher_requests[cpu_nr_].rnbl;
@@ -189,19 +199,20 @@ void do_work(void)
                         uint32_t lsw = (uint64_t) data & 0x00000000FFFFFFFF;
                         uint32_t msw_id = ((uint64_t) id & 0xFFFFFFFF00000000) >> 32;
                         uint32_t lsw_id = (uint64_t) id & 0x00000000FFFFFFFF;
-                        ucontext_t * cont = context_alloc(&percpu_get(context_pool),
-                                                          &percpu_get(stack_pool));
+                        cont = context_alloc(&percpu_get(context_pool),
+                                             &percpu_get(stack_pool));
                         set_context_link(cont, &uctx_main);
                         makecontext(cont, generic_work, 4, msw, lsw, msw_id, lsw_id);
-                        ret = swapcontext_fast(&uctx_main, cont);
+                        finished = 0;
+                        ret = swapcontext_very_fast(&uctx_main, cont);
                         if (ret) {
                                 log_err("do_work: failed to do swapcontext_fast\n");
                                 exit(-1);
                         }
-                        context_free(cont, &percpu_get(context_pool),
-                                     &percpu_get(stack_pool));
+                        if (finished)
+                                context_free(cont, &percpu_get(context_pool),
+                                             &percpu_get(stack_pool));
                 }
-                eth_process_send();
                 worker_responses[cpu_nr_].flag = FINISHED;
         }
 }
