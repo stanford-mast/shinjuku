@@ -15,7 +15,7 @@
 
 #define NOCONTENT   0x00
 #define PACKET      0x01
-#define CONTEXt     0x02
+#define CONTEXT     0x02
 
 struct mempool_datastore task_datastore;
 struct mempool task_mempool __attribute((aligned(64)));

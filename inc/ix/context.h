@@ -28,136 +28,14 @@
 
 #include <stdint.h>
 #include <ucontext.h>
-#include <asm/prctl.h>
 
 #include <ix/mempool.h>
 
+struct mempool_datastore stack_datastore;
+struct mempool_datastore context_datastore;
+
 extern int getcontext_fast(ucontext_t *ucp);
 
-/**
- * getcontext_fast - gets the user context except the for the signal mask
- * @ucp: pointer to the ucontext_t structure to be initialized
- *
- * Returns 0, or -1 if failure.
- */
-/*
-static int getcontext_fast(ucontext_t *ucp)
-{
-    asm volatile (
-        "movq        %rbx, 0x80(%rdi)\n"
-        "movq        %rbp, 0x78(%rdi)\n"
-        "movq        %r12, 0x48(%rdi)\n"
-        "movq        %r13, 0x50(%rdi)\n"
-        "movq        %r14, 0x58(%rdi)\n"
-        "movq        %r15, 0x60(%rdi)\n"
-
-        "movq        %rdi, 0x68(%rdi)\n"
-        "movq        %rsi, 0x70(%rdi)\n"
-        "movq        %rdx, 0x88(%rdi)\n"
-        "movq        %rcx, 0x98(%rdi)\n"
-        "movq        %r8, 0x28(%rdi)\n"
-        "movq        %r9, 0x30(%rdi)\n"
-
-        "movq        (%rsp), %rcx\n"
-        "movq        %rcx, 0xa8(%rdi)\n"
-        "leaq        8(%rsp), %rcx\n"     // Exclude the return address.
-        "movq        %rcx, 0xa0(%rdi)\n"
-
-        // We have separate floating-point register content memory on the
-        //  stack.  We use the __fpregs_mem block in the context.  Set the
-        //  links up correctly.
-        "leaq        0x1a8(%rdi), %rcx\n"
-        "movq        %rcx, 0xe0(%rdi)\n"
-        // Save the floating-point environment.
-        "fnstenv        (%rcx)\n"
-        "fldenv        (%rcx)\n"
-        "stmxcsr 0x1c0(%rdi)\n"
-
-        // All done, return 0 for success.
-        "xorl        %eax, %eax\n"
-    );
-
-    return 0;
-}
-*/
-/**
- * swapcontext_fast - saves current context and activate the context pointed to
- * by ucp. Does not save signal mask.
- * @ouctx: pointer to ucontext_t where current context will be saved
- * @uctx: the context to be activated
- *
- * Returns 0, or -1 if failure.
- */
-/*
-static int swapcontext_fast(ucontext_t *ouctx, ucontext_t *ucp)
-{
-    asm volatile (
-        // Save the preserved registers, the registers used for passing args,
-        // and the return address.
-        "movq   %rbx, 0x80(%rdi)\n"
-        "movq   %rbp, 0x78(%rdi)\n"
-        "movq   %r12, 0x48(%rdi)\n"
-        "movq   %r13, 0x50(%rdi)\n"
-        "movq   %r14, 0x58(%rdi)\n"
-        "movq   %r15, 0x60(%rdi)\n"
-
-        "movq   %rdi, 0x68(%rdi)\n"
-        "movq   %rsi, 0x70(%rdi)\n"
-        "movq   %rdx, 0x88(%rdi)\n"
-        "movq   %rcx, 0x98(%rdi)\n"
-        "movq   %r8, 0x28(%rdi)\n"
-        "movq   %r9, 0x30(%rdi)\n"
-
-        "movq   (%rsp), %rcx\n"
-        "movq   %rcx, 0xa8(%rdi)\n"
-        "leaq   8(%rsp), %rcx\n"        // Exclude the return address.
-        "movq   %rcx, 0xa0(%rdi)\n"
-
-        // We have separate floating-point register content memory on the
-        //   stack.  We use the __fpregs_mem block in the context.  Set the
-        //   links up correctly.
-        "leaq   0x1a8(%rdi), %rcx\n"
-        "movq   %rcx, 0xe0(%rdi)\n"
-        // Save the floating-point environment.
-        "fnstenv    (%rcx)\n"
-        "stmxcsr 0x1c0(%rdi)\n"
-
-        // Restore the floating-point context.  Not the registers, only the
-        // rest.
-        "movq   0xe0(%rsi), %rcx\n"
-        "fldenv (%rcx)\n"
-        "ldmxcsr 0x1c0(%rsi)\n"
-
-        // Load the new stack pointer and the preserved registers.
-        "movq   0xa0(%rsi), %rsp\n"
-        "movq   0x80(%rsi), %rbx\n"
-        "movq   0x78(%rsi), %rbp\n"
-        "movq   0x48(%rsi), %r12\n"
-        "movq   0x50(%rsi), %r13\n"
-        "movq   0x58(%rsi), %r14\n"
-        "movq   0x60(%rsi), %r15\n"
-
-        // The following ret should return to the address set with
-        // getcontext.  Therefore push the address on the stack.
-        "movq   0xa8(%rsi), %rcx\n"
-        "pushq  %rcx\n"
-
-        // Setup registers used for passing args.
-        "movq   0x68(%rsi), %rdi\n"
-        "movq   0x88(%rsi), %rdx\n"
-        "movq   0x98(%rsi), %rcx\n"
-        "movq   0x28(%rsi), %r8\n"
-        "movq   0x30(%rsi), %r9\n"
-
-		 // Setup finally  %rsi.
-        "movq   0x70(%rsi), %rsi\n"
-
-        // Clear rax to indicate success.
-        "xorl   %eax, %eax\n"
-    );
-    return 0;
-}
-*/
 /**
  * context_alloc - allocates a ucontext_t with its stack
  * @context_mempool: pool for ucontext_t

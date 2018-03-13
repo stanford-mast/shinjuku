@@ -49,7 +49,6 @@ static int mcell_init_mempool(void)
  *
  * Returns 0 if successful, otherwise failure.
  */
-
 int taskqueue_init(void)
 {
 	int ret;

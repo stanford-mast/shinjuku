@@ -87,6 +87,8 @@ extern int dpdk_init(void);
 extern int taskqueue_init(void);
 extern int response_init(void);
 extern int response_init_cpu(void);
+extern int context_init(void);
+extern int context_init_cpu(void);
 extern void do_work(void);
 extern void do_networking(void);
 extern void do_dispatching(int num_cpus);
@@ -117,6 +119,7 @@ static struct init_vector_t init_tbl[] = {
 	{ "tcpapi",  tcp_api_init, tcp_api_init_cpu, NULL},
 	{ "migration", NULL, init_migration_cpu, NULL},
 	{ "response", response_init, response_init_cpu, NULL},
+	{ "context", context_init, context_init_cpu, NULL},
         { "ethdev", init_ethdev, NULL, NULL},
         { "tx_queue", NULL, init_tx_queues, NULL},
 	{ "hw",      init_hw,      NULL, NULL},               // spaws per-cpu init sequence
@@ -451,6 +454,7 @@ int main(int argc, char *argv[])
         log_info("init done\n");
 
         do_dispatching(CFG.num_cpus);
+        //dune_apic_send_posted_ipi(0,0);
         // Waiting for one context to be executed so that both dispatcher and
         // worker are ready.
         

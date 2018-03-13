@@ -54,13 +54,12 @@
 #define DELAY 0
 
 __thread ucontext_t uctx_main;
-ucontext_t uctx;
-
-//FIXME Remove stack from here when integrated with ffwd
-char uctx_stack[16384];
+__thread uint8_t sending;
 
 DEFINE_PERCPU(struct mempool, response_pool __attribute__((aligned(64))));
 
+DECLARE_PERCPU(struct mempool, context_pool);
+DECLARE_PERCPU(struct mempool, stack_pool);
 
 extern int getcontext_fast(ucontext_t *ucp);
 extern int swapcontext_fast(ucontext_t *ouctx, ucontext_t *uctx);
@@ -96,25 +95,46 @@ int response_init_cpu(void)
                               percpu_get(cpu_id));
 }
 
-static void generic_work(void){
-    int ret;
-
-    while(1) {
-        //log_info("generic_work: Swapping back to main context\n");
-        ret = swapcontext_fast(&uctx, &uctx_main);
-        if (ret) {
-            //  TODO Free context from mempool or return it to dispatcher
-            log_err("do_work: failed to do swapcontext\n");
-            exit(-1);
-        }
-    }
-}
-
-static ucontext_t * get_work(ucontext_t * fini_uctx)
+/**
+ * generic_work - generic function acting as placeholder for application-level
+ *                work
+ * @msw: the top 32-bits of the pointer containing the data
+ * @lsw: the bottom 32 bits of the pointer containing the data
+ */
+static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
+                         uint32_t lsw_id)
 {
-    // TODO Use ffwd here to talk with dispatcher CPU and get remote context
-    // TODO Need to update uc_link to local uctx_main here
-    return fini_uctx;
+        sending = false;
+
+        struct ip_tuple * id = (struct ip_tuple *) ((uint64_t) msw_id << 32 | lsw_id);
+        void * data = (void *)((uint64_t) msw << 32 | lsw);
+        int ret;
+
+        struct response * resp = mempool_alloc(&percpu_get(response_pool));
+        if (!resp) {
+                log_warn("Cannot allocate response buffer\n");
+                return;
+        }
+
+        resp->genNs = ((struct request *)data)->genNs;
+        struct ip_tuple new_id = {
+                .src_ip = id->dst_ip,
+                .dst_ip = id->src_ip,
+                .src_port = id->dst_port,
+                .dst_port = id->src_port
+        };
+
+        uint64_t start64, end64;
+        start64 = rdtsc();
+        do {
+                end64 = rdtsc();
+        } while (((end64 - start64) / 2.7) < DELAY);
+
+        sending = true;
+        ret = udp_send((void *)resp, sizeof(struct response), &new_id,
+                       (uint64_t) resp);
+        if (ret)
+                log_warn("udp_send failed with error %d\n", ret);
 }
 
 static void parse_packet(struct mbuf * pkt, void ** data_ptr,
@@ -149,9 +169,6 @@ static void parse_packet(struct mbuf * pkt, void ** data_ptr,
 
 void do_work(void)
 {
-        // FIXME Remove these after benchmarking finishes
-        struct timespec start, end;
-        uint64_t start64, end64;
         int ret;
         struct mbuf * pkt;
         void * data;
@@ -168,82 +185,23 @@ void do_work(void)
                 pkt = (struct mbuf *) dispatcher_requests[cpu_nr_].rnbl;
                 parse_packet(pkt, &data, &id);
                 if (data) {
-                        struct response * resp = mempool_alloc(&percpu_get(response_pool));
-                        if (!resp) {
-                                log_warn("Cannot allocate response buffer\n");
-                                goto end;
-                        }
-                        resp->genNs = ((struct request *)data)->genNs;
-                        struct ip_tuple new_id = {
-                                .src_ip = id->dst_ip,
-                                .dst_ip = id->src_ip,
-                                .src_port = id->dst_port,
-                                .dst_port = id->src_port
-                        };
-                        start64 = rdtsc();
-                        do {
-                                end64 = rdtsc();
-                        } while (((end64 - start64) / 2.7) < DELAY);
-                        ret = udp_send((void *)resp, sizeof(struct response), &new_id,
-                                       (uint64_t) resp);
+                        uint32_t msw = ((uint64_t) data & 0xFFFFFFFF00000000) >> 32;
+                        uint32_t lsw = (uint64_t) data & 0x00000000FFFFFFFF;
+                        uint32_t msw_id = ((uint64_t) id & 0xFFFFFFFF00000000) >> 32;
+                        uint32_t lsw_id = (uint64_t) id & 0x00000000FFFFFFFF;
+                        ucontext_t * cont = context_alloc(&percpu_get(context_pool),
+                                                          &percpu_get(stack_pool));
+                        set_context_link(cont, &uctx_main);
+                        makecontext(cont, generic_work, 4, msw, lsw, msw_id, lsw_id);
+                        ret = swapcontext_fast(&uctx_main, cont);
                         if (ret) {
-                                log_warn("udp_send failed with error %d\n", ret);
-                                log_warn("Destination IP: %lu\n", new_id.dst_ip);
+                                log_err("do_work: failed to do swapcontext_fast\n");
+                                exit(-1);
                         }
-                        eth_process_send();
+                        context_free(cont, &percpu_get(context_pool),
+                                     &percpu_get(stack_pool));
                 }
-end:
+                eth_process_send();
                 worker_responses[cpu_nr_].flag = FINISHED;
         }
-
-    /*
-    for(i = 0; i < 100000; i++) {
-        while (dispatcher_requests[cpu_nr].flag == WAITING);
-        //worker_responses[cpu_nr].cont = NULL;
-        dispatcher_requests[cpu_nr].flag = WAITING;
-        //log_info("do_work: Got dispatcher work\n");
-        //dispatcher_requests[cpu_nr].cont->uc_link = &uctx_main;
-        //makecontext(dispatcher_requests[cpu_nr].cont, generic_work, 0);
-
-        //log_info("do_work: calling swapcontext_fast()\n");
-        //ret = swapcontext_fast(&uctx_main, dispatcher_requests[cpu_nr].cont);
-        //if (ret) {
-        //   log_err("do_work: failed to swapcontext_fast\n");
-        //    exit(-1);
-        //}
-        //log_info("do_work: swapped back to main context\n");
-        //worker_responses[cpu_nr].cont = dispatcher_requests[cpu_nr].cont;
-        //worker_responses[cpu_nr].flag = FINISHED;
-        //end64 = rdtsc();
-        //foo[i] = (end64 - start64) / 2.8;
-        //start64 = end64;
-    }*/
-
-    /*
-    if (cpu_nr == 1) {
-        for (i = 0; i < 100000; i++) {
-            printf("%lu\n", foo[i]);
-        }
-    }*/
-    /*
-    log_info("do_work: starting benchmarking...\n");
-    clock_gettime(CLOCK_MONOTONIC, &start);
-
-    for (i = 0; i < 100000; i++) {
-        ret = swapcontext_fast(&uctx_main, &uctx);
-        if (ret) {
-            //  TODO Free context from mempool or return it to dispatcher
-            log_err("do_work: failed to do swapcontext_fast\n");
-            exit(-1);
-        }
-    }
-
-    clock_gettime(CLOCK_MONOTONIC, &end);
-    start64 = 10e9 * start.tv_sec + start.tv_nsec;
-    end64 = 10e9 * end.tv_sec + end.tv_nsec;
-    log_info("do_work: average context creation time: %lu ns\n",
-             (end64 - start64) / 200000);
-    */
-    log_info("do_work: finished benchmarking, looping forever\n");
-    while (1);
 }
