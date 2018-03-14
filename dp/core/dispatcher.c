@@ -27,7 +27,27 @@
  * core and dispatching these packets or contexts to the worker cores.
  */
 
+#include <ix/cfg.h>
 #include <ix/dispatch.h>
+
+extern void dune_apic_send_posted_ipi(uint8_t vector, uint32_t dest_core);
+
+#define PREEMPT_VECTOR 0xf2
+#define PREEMPTION_DELAY 50000
+
+static void timestamp_init(int num_workers)
+{
+        int i;
+        for (i = 0; i < num_workers; i++)
+                timestamps[i] = MAX_UINT64;
+}
+
+static void preempt_check_init(int num_workers)
+{
+        int i;
+        for (i = 0; i < num_workers; i++)
+                preempt_check[i] = false;
+}
 
 /**
  * do_dispatching - implements dispatcher core's main loop
@@ -38,28 +58,56 @@ void do_dispatching(int num_cpus)
 
         //FIXME Remove these when done testing
         void * rnbl = NULL;
+        void * mbuf = NULL;
         uint8_t type = 0xFF;
         uint64_t timestamp = 0;
+        uint64_t cur_time;
+        preempt_check_init(num_cpus - 2);
+        timestamp_init(num_cpus - 2);
 
         while(1) {
+                cur_time = rdtsc();
                 for (i = 0; i < num_cpus - 2; i++) {
                         if (worker_responses[i].flag != RUNNING) {
-                                tskq_dequeue(&tskq, &rnbl, &type, &timestamp);
-                                if (!rnbl)
-                                    break;
+                                if (worker_responses[i].flag == FINISHED) {
+                                        if (worker_responses[i].mbuf == NULL)
+                                                log_info("There is no mbuf here\n");
+                                        mbuf_enqueue(&mqueue, (struct mbuf *) worker_responses[i].mbuf);
+                                        preempt_check[i] = false;
+                                        worker_responses[i].flag = PROCESSED;
+                                } else if (worker_responses[i].flag == PREEMPTED) {
+                                        log_info("I cannot be preempted\n");
+                                        rnbl = worker_responses[i].rnbl;
+                                        mbuf = worker_responses[i].mbuf;
+                                        timestamp = worker_responses[i].timestamp;
+                                        tskq_enqueue_tail(&tskq, rnbl, mbuf,
+                                                          CONTEXT, timestamp);
+                                        preempt_check[i] = false;
+                                        worker_responses[i].flag = PROCESSED;
+                                }
+
+                                if(tskq_dequeue(&tskq, &rnbl, &mbuf, &type,
+                                                &timestamp))
+                                        break;
                                 worker_responses[i].flag = RUNNING;
-                                mbuf_enqueue(&mqueue, (struct mbuf *) dispatcher_requests[i].rnbl);
                                 dispatcher_requests[i].rnbl = rnbl;
+                                dispatcher_requests[i].mbuf = mbuf;
                                 dispatcher_requests[i].type = type;
                                 dispatcher_requests[i].timestamp = timestamp;
+                                timestamps[i] = cur_time;
+                                preempt_check[i] = true;
                                 dispatcher_requests[i].flag = ACTIVE;
+                        } else if ((preempt_check[i] && cur_time - timestamps[i]) / 2.7 > PREEMPTION_DELAY) {
+                                // Avoid preempting more times.
+                                preempt_check[i] = false;
+                                dune_apic_send_posted_ipi(PREEMPT_VECTOR,
+                                                          CFG.cpu[i + 2]);
                         }
                 }
                 if (networker_pointers.cnt != 0) {
-                        for (i = 0; i < networker_pointers.cnt; i++) {
-                                tskq_enqueue_tail(&tskq, (void *)networker_pointers.pkts[i],
-                                                  PACKET, networker_pointers.pkts[i]->timestamp);
-                        }
+                        for (i = 0; i < networker_pointers.cnt; i++)
+                                tskq_enqueue_tail(&tskq, NULL, (void *)networker_pointers.pkts[i],
+                                                  PACKET, cur_time);
                         // FIXME return here even if network_pointers.cnt is 0
                         for (i = 0; i < ETH_RX_MAX_BATCH; i++) {
                                 struct mbuf * buf = mbuf_dequeue(&mqueue);

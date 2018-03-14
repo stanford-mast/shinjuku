@@ -47,16 +47,19 @@
 #include <ix/dispatch.h>
 #include <ix/transmit.h>
 
+#include <dune.h>
+
 #include <net/ip.h>
 #include <net/udp.h>
 #include <net/ethernet.h>
 
-#define DELAY 0
+#define DELAY 75000
+#define PREEMPT_VECTOR 0xf2
 
 __thread ucontext_t uctx_main;
 __thread ucontext_t * cont;
-__thread uint8_t sending;
-__thread uint8_t finished;
+__thread volatile uint8_t sending;
+__thread volatile uint8_t finished;
 
 DEFINE_PERCPU(struct mempool, response_pool __attribute__((aligned(64))));
 
@@ -66,6 +69,9 @@ DECLARE_PERCPU(struct mempool, stack_pool);
 extern int getcontext_fast(ucontext_t *ucp);
 extern int swapcontext_fast(ucontext_t *ouctx, ucontext_t *uctx);
 extern int swapcontext_very_fast(ucontext_t *ouctx, ucontext_t *uctx);
+
+extern void dune_apic_eoi();
+extern int dune_register_intr_handler(int vector, dune_intr_cb cb);
 
 struct response {
         uint64_t id;
@@ -96,6 +102,15 @@ int response_init_cpu(void)
         struct mempool *m = &percpu_get(response_pool);
         return mempool_create(m, &response_datastore, MEMPOOL_SANITY_PERCPU,
                               percpu_get(cpu_id));
+}
+
+static void test_handler(struct dune_tf *tf)
+{
+        dune_apic_eoi();
+        if (!sending) {
+                sending = true;
+                swapcontext_fast(cont, &uctx_main);
+        }
 }
 
 /**
@@ -132,7 +147,7 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
         start64 = rdtsc();
         do {
                 end64 = rdtsc();
-        } while (((end64 - start64) / 2.7) < DELAY);
+        } while ((end64 - start64) / 2.7 < DELAY);
 
         sending = true;
         ret = udp_send((void *)resp, sizeof(struct response), &new_id,
@@ -140,7 +155,7 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
         if (ret)
                 log_warn("udp_send failed with error %d\n", ret);
 
-        finished = 1;
+        finished = true;
         swapcontext_very_fast(cont, &uctx_main);
 }
 
@@ -180,39 +195,74 @@ void do_work(void)
         struct mbuf * pkt;
         void * data;
         struct ip_tuple * id;
+        sending = true;
 
         int cpu_nr_ = percpu_get(cpu_nr) - 2;
-        worker_responses[cpu_nr_].flag = FINISHED;
+        worker_responses[cpu_nr_].flag = PROCESSED;
+        dune_register_intr_handler(PREEMPT_VECTOR, test_handler);
+        eth_process_reclaim();
 
         log_info("do_work: Waiting for dispatcher work\n");
         while (1) {
+                uint8_t allocated = true;
+                sending = true;
                 if (data) {
                         eth_process_reclaim();
                         eth_process_send();
                 }
                 while (dispatcher_requests[cpu_nr_].flag == WAITING);
                 dispatcher_requests[cpu_nr_].flag = WAITING;
-                pkt = (struct mbuf *) dispatcher_requests[cpu_nr_].rnbl;
-                parse_packet(pkt, &data, &id);
-                if (data) {
-                        uint32_t msw = ((uint64_t) data & 0xFFFFFFFF00000000) >> 32;
-                        uint32_t lsw = (uint64_t) data & 0x00000000FFFFFFFF;
-                        uint32_t msw_id = ((uint64_t) id & 0xFFFFFFFF00000000) >> 32;
-                        uint32_t lsw_id = (uint64_t) id & 0x00000000FFFFFFFF;
-                        cont = context_alloc(&percpu_get(context_pool),
-                                             &percpu_get(stack_pool));
-                        set_context_link(cont, &uctx_main);
-                        makecontext(cont, generic_work, 4, msw, lsw, msw_id, lsw_id);
-                        finished = 0;
-                        ret = swapcontext_very_fast(&uctx_main, cont);
+                if (dispatcher_requests[cpu_nr_].type == PACKET) {
+                        pkt = (struct mbuf *) dispatcher_requests[cpu_nr_].mbuf;
+                        parse_packet(pkt, &data, &id);
+                        if (data) {
+                                uint32_t msw = ((uint64_t) data & 0xFFFFFFFF00000000) >> 32;
+                                uint32_t lsw = (uint64_t) data & 0x00000000FFFFFFFF;
+                                uint32_t msw_id = ((uint64_t) id & 0xFFFFFFFF00000000) >> 32;
+                                uint32_t lsw_id = (uint64_t) id & 0x00000000FFFFFFFF;
+                                cont = context_alloc(&percpu_get(context_pool),
+                                                     &percpu_get(stack_pool));
+                                if (unlikely(!cont)) {
+                                        log_err("do_work: cannot allocated context\n");
+                                        exit(-1);
+                                }
+                                set_context_link(cont, &uctx_main);
+                                makecontext(cont, generic_work, 4, msw, lsw, msw_id, lsw_id);
+                                finished = false;
+                                ret = swapcontext_very_fast(&uctx_main, cont);
+                                if (ret) {
+                                        log_err("do_work: failed to do swapcontext_fast\n");
+                                        exit(-1);
+                                }
+                                finished = true;
+                        } else {
+                                finished = true;
+                                allocated = false;
+                        }
+                } else {
+                        finished = false;
+                        cont = dispatcher_requests[cpu_nr_].rnbl;
+                        ret = swapcontext_fast(&uctx_main, cont);
                         if (ret) {
-                                log_err("do_work: failed to do swapcontext_fast\n");
+                                log_err("do_work: failed to swap to existing context\n");
                                 exit(-1);
                         }
-                        if (finished)
+                        finished = true;
+                }
+                worker_responses[cpu_nr_].timestamp = \
+                                dispatcher_requests[cpu_nr_].timestamp;
+                worker_responses[cpu_nr_].mbuf = pkt;
+                if (finished) {
+                        if (allocated) {
                                 context_free(cont, &percpu_get(context_pool),
                                              &percpu_get(stack_pool));
+                        }
+                        worker_responses[cpu_nr_].type = PACKET;
+                        worker_responses[cpu_nr_].flag = FINISHED;
+                } else {
+                        worker_responses[cpu_nr_].rnbl = cont;
+                        worker_responses[cpu_nr_].type = CONTEXT;
+                        worker_responses[cpu_nr_].flag = PREEMPTED;
                 }
-                worker_responses[cpu_nr_].flag = FINISHED;
         }
 }

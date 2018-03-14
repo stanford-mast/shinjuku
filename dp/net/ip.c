@@ -129,6 +129,7 @@ int eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt)
 	log_debug("ip: got ethernet packet of len %ld, type %x\n",
 		  pkt->len, ntoh16(ethhdr->type));
 
+        /*
 	measure_ctx.received_total += pkt->len;
 	measure_ctx.packets_total += 1;
 	if (measure_ctx.packets_total > 10000000) {
@@ -139,7 +140,7 @@ int eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt)
 		    now.tv_nsec - measure_ctx.prev.tv_nsec);
 	    measure_ctx.prev.tv_sec = now.tv_sec;
 	    measure_ctx.prev.tv_nsec = now.tv_nsec;
-	}
+	}*/
 
 	if (ethhdr->type == hton16(ETHTYPE_IP))
                 return ip_input(NULL, pkt, mbuf_nextd(ethhdr, struct ip_hdr *));
