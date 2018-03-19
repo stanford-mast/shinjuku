@@ -53,7 +53,7 @@ int udp_input(struct mbuf *pkt, struct ip_hdr *iphdr, struct udp_hdr *udphdr)
 
 	if (unlikely(!mbuf_enough_space(pkt, udphdr, len))) {
 		mbuf_free(pkt);
-		return;
+		return -1;
 	}
 
 #ifdef DEBUG

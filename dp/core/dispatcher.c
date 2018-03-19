@@ -60,6 +60,7 @@ void do_dispatching(int num_cpus)
         void * rnbl = NULL;
         void * mbuf = NULL;
         uint8_t type = 0xFF;
+        uint8_t category = 0xFF;
         uint64_t timestamp = 0;
         uint64_t cur_time;
         preempt_check_init(num_cpus - 2);
@@ -79,20 +80,24 @@ void do_dispatching(int num_cpus)
                                         log_info("I cannot be preempted\n");
                                         rnbl = worker_responses[i].rnbl;
                                         mbuf = worker_responses[i].mbuf;
+                                        category = worker_responses[i].category;
+                                        type = worker_responses[i].type;
                                         timestamp = worker_responses[i].timestamp;
                                         tskq_enqueue_tail(&tskq, rnbl, mbuf,
-                                                          CONTEXT, timestamp);
+                                                          type, category,
+                                                          timestamp);
                                         preempt_check[i] = false;
                                         worker_responses[i].flag = PROCESSED;
                                 }
 
                                 if(tskq_dequeue(&tskq, &rnbl, &mbuf, &type,
-                                                &timestamp))
+                                                &category, &timestamp))
                                         break;
                                 worker_responses[i].flag = RUNNING;
                                 dispatcher_requests[i].rnbl = rnbl;
                                 dispatcher_requests[i].mbuf = mbuf;
                                 dispatcher_requests[i].type = type;
+                                dispatcher_requests[i].category = category;
                                 dispatcher_requests[i].timestamp = timestamp;
                                 timestamps[i] = cur_time;
                                 preempt_check[i] = true;
@@ -107,6 +112,7 @@ void do_dispatching(int num_cpus)
                 if (networker_pointers.cnt != 0) {
                         for (i = 0; i < networker_pointers.cnt; i++)
                                 tskq_enqueue_tail(&tskq, NULL, (void *)networker_pointers.pkts[i],
+                                                  networker_pointers.types[i],
                                                   PACKET, cur_time);
                         // FIXME return here even if network_pointers.cnt is 0
                         for (i = 0; i < ETH_RX_MAX_BATCH; i++) {

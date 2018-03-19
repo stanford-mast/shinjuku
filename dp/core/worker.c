@@ -185,9 +185,6 @@ static void parse_packet(struct mbuf * pkt, void ** data_ptr,
         (*id_ptr)->src_port = ntoh16(udphdr->src_port);
         (*id_ptr)->dst_port = ntoh16(udphdr->dst_port);
         pkt->done = (void *) 0xDEADBEEF;
-
-        if ((*id_ptr)->dst_port != 1234)
-                (*data_ptr) = NULL;
 }
 
 void do_work(void)
@@ -213,7 +210,7 @@ void do_work(void)
                 }
                 while (dispatcher_requests[cpu_nr_].flag == WAITING);
                 dispatcher_requests[cpu_nr_].flag = WAITING;
-                if (dispatcher_requests[cpu_nr_].type == PACKET) {
+                if (dispatcher_requests[cpu_nr_].category == PACKET) {
                         pkt = (struct mbuf *) dispatcher_requests[cpu_nr_].mbuf;
                         parse_packet(pkt, &data, &id);
                         if (data) {
@@ -252,17 +249,19 @@ void do_work(void)
                 }
                 worker_responses[cpu_nr_].timestamp = \
                                 dispatcher_requests[cpu_nr_].timestamp;
+                worker_responses[cpu_nr_].type = \
+                                dispatcher_requests[cpu_nr_].type;
                 worker_responses[cpu_nr_].mbuf = pkt;
                 if (finished) {
                         if (allocated) {
                                 context_free(cont, &percpu_get(context_pool),
                                              &percpu_get(stack_pool));
                         }
-                        worker_responses[cpu_nr_].type = PACKET;
+                        worker_responses[cpu_nr_].category = PACKET;
                         worker_responses[cpu_nr_].flag = FINISHED;
                 } else {
                         worker_responses[cpu_nr_].rnbl = cont;
-                        worker_responses[cpu_nr_].type = CONTEXT;
+                        worker_responses[cpu_nr_].category = CONTEXT;
                         worker_responses[cpu_nr_].flag = PREEMPTED;
                 }
         }

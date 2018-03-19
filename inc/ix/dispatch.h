@@ -32,7 +32,8 @@ struct worker_response
         void * mbuf;
         uint64_t timestamp;
         uint8_t type;
-        char make_it_64_bytes[31];
+        uint8_t category;
+        char make_it_64_bytes[30];
 } __attribute__((packed, aligned(64)));
 
 struct dispatcher_request
@@ -41,8 +42,9 @@ struct dispatcher_request
         void * rnbl;
         void * mbuf;
         uint8_t type;
+        uint8_t category;
         uint64_t timestamp;
-        char make_it_64_bytes[31];
+        char make_it_64_bytes[30];
 } __attribute__((packed, aligned(64)));
 
 struct networker_pointers_t
@@ -95,6 +97,7 @@ struct task {
         void * runnable;
         void * mbuf;
         uint8_t type;
+        uint8_t category;
         uint64_t timestamp;
         struct task * next;
 };
@@ -109,12 +112,13 @@ struct task_queue tskq;
 
 static inline void tskq_enqueue_head(struct task_queue * tq, void * rnbl,
                                      void * mbuf, uint8_t type,
-                                     uint64_t timestamp)
+                                     uint8_t category, uint64_t timestamp)
 {
         struct task * tsk = mempool_alloc(&task_mempool);
         tsk->runnable = rnbl;
         tsk->mbuf = mbuf;
         tsk->type = type;
+        tsk->category = category;
         tsk->timestamp = timestamp;
         if (tq->head != NULL) {
             struct task * tmp = tq->head;
@@ -129,7 +133,7 @@ static inline void tskq_enqueue_head(struct task_queue * tq, void * rnbl,
 
 static inline void tskq_enqueue_tail(struct task_queue * tq, void * rnbl,
                                      void * mbuf, uint8_t type,
-                                     uint64_t timestamp)
+                                     uint8_t category, uint64_t timestamp)
 {
         struct task * tsk = mempool_alloc(&task_mempool);
         if (!tsk)
@@ -137,6 +141,7 @@ static inline void tskq_enqueue_tail(struct task_queue * tq, void * rnbl,
         tsk->runnable = rnbl;
         tsk->mbuf = mbuf;
         tsk->type = type;
+        tsk->category = category;
         tsk->timestamp = timestamp;
         if (tq->head != NULL) {
             tq->tail->next = tsk;
@@ -150,7 +155,7 @@ static inline void tskq_enqueue_tail(struct task_queue * tq, void * rnbl,
 }
 
 static inline int tskq_dequeue(struct task_queue * tq, void ** rnbl_ptr,
-                                void ** mbuf, uint8_t *type,
+                                void ** mbuf, uint8_t *type, uint8_t *category,
                                 uint64_t *timestamp)
 {
         if (tq->head == NULL)
@@ -158,6 +163,7 @@ static inline int tskq_dequeue(struct task_queue * tq, void ** rnbl_ptr,
         (*rnbl_ptr) = tq->head->runnable;
         (*mbuf) = tq->head->mbuf;
         (*type) = tq->head->type;
+        (*category) = tq->head->category;
         (*timestamp) = tq->head->timestamp;
         struct task * tsk = tq->head;
         tq->head = tq->head->next;
