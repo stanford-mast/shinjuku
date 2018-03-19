@@ -431,11 +431,7 @@ static int init_firstcpu(void)
 
 int main(int argc, char *argv[])
 {
-	int ret, i, j;
-    ucontext_t uctx;
-    struct timespec start, end;
-    uint64_t start64, end64;
-
+	int ret, i;
 	init_argc = argc;
 	init_argv = argv;
 

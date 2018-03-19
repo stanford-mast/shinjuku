@@ -74,12 +74,12 @@ extern void dune_apic_eoi();
 extern int dune_register_intr_handler(int vector, dune_intr_cb cb);
 
 struct response {
-        uint64_t id;
+        uint64_t runNs;
         uint64_t genNs;
 };
 
 struct request {
-        uint64_t id;
+        uint64_t runNs;
         uint64_t genNs;
 };
 
@@ -135,7 +135,8 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
                 swapcontext_very_fast(cont, &uctx_main);
         }
 
-        resp->genNs = ((struct request *)data)->genNs;
+        struct request * req = (struct request *) data;
+        resp->genNs = req->genNs;
         struct ip_tuple new_id = {
                 .src_ip = id->dst_ip,
                 .dst_ip = id->src_ip,
@@ -147,7 +148,7 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
         start64 = rdtsc();
         do {
                 end64 = rdtsc();
-        } while ((end64 - start64) / 2.7 < DELAY);
+        } while ((end64 - start64) / 2.7 < req->runNs);
 
         sending = true;
         ret = udp_send((void *)resp, sizeof(struct response), &new_id,

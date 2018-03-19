@@ -33,7 +33,7 @@
 extern void dune_apic_send_posted_ipi(uint8_t vector, uint32_t dest_core);
 
 #define PREEMPT_VECTOR 0xf2
-#define PREEMPTION_DELAY 50000
+#define PREEMPTION_DELAY MAX_UINT64
 
 static void timestamp_init(int num_workers)
 {
