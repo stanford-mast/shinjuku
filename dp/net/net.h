@@ -45,8 +45,8 @@ extern int arp_init(void);
 extern void icmp_input(struct eth_fg *, struct mbuf *pkt, struct icmp_hdr *hdr, int len);
 
 /* Unreliable Datagram Protocol (UDP) definitions */
-extern void udp_input(struct mbuf *pkt, struct ip_hdr *iphdr,
-		      struct udp_hdr *udphdr);
+extern int udp_input(struct mbuf *pkt, struct ip_hdr *iphdr,
+	             struct udp_hdr *udphdr);
 
 /* Transmission Control Protocol (TCP) definitions */
 /* FIXME: change when we integrate better with LWIP */

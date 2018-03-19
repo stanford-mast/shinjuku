@@ -65,7 +65,7 @@ void ip_addr_to_str(struct ip_addr *addr, char *str)
 
 static int ip_input(struct eth_fg *cur_fg, struct mbuf *pkt, struct ip_hdr *hdr)
 {
-	int hdrlen, pktlen;
+	int hdrlen, pktlen, ret;
 
 	/* check that the packet is long enough */
 	if (!mbuf_enough_space(pkt, hdr, sizeof(struct ip_hdr)))
@@ -97,9 +97,11 @@ static int ip_input(struct eth_fg *cur_fg, struct mbuf *pkt, struct ip_hdr *hdr)
                 log_debug("ip: dropping TCP packet\n");
                 goto out;
 	case IPPROTO_UDP:
-                return 0;
-		//return udp_input(pkt, hdr,
-		//     	         mbuf_nextd_off(hdr, struct udp_hdr *, hdrlen));
+		ret = udp_input(pkt, hdr, mbuf_nextd_off(hdr,struct udp_hdr *,
+                                                         hdrlen));
+                if (ret < 0)
+                        goto out;
+                return ret;
 	case IPPROTO_ICMP:
                 log_warn("ip: dropping ICMP packet\n");
                 goto out;
@@ -124,7 +126,7 @@ static struct eth_ctx measure_ctx = {
 int eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt)
 {
 	struct eth_hdr *ethhdr = mbuf_mtod(pkt, struct eth_hdr *);
-	struct timespec now;
+        //struct timespec now;
 
 	log_debug("ip: got ethernet packet of len %ld, type %x\n",
 		  pkt->len, ntoh16(ethhdr->type));

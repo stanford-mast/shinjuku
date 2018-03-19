@@ -44,8 +44,9 @@
 
 #include "net.h"
 
-void udp_input(struct mbuf *pkt, struct ip_hdr *iphdr, struct udp_hdr *udphdr)
+int udp_input(struct mbuf *pkt, struct ip_hdr *iphdr, struct udp_hdr *udphdr)
 {
+        int i;
 	void *data = mbuf_nextd(udphdr, void *);
 	uint16_t len = ntoh16(udphdr->len);
 	struct ip_tuple *id;
@@ -71,17 +72,11 @@ void udp_input(struct mbuf *pkt, struct ip_hdr *iphdr, struct udp_hdr *udphdr)
 		  ntoh16(udphdr->dst_port), ntoh16(udphdr->len));
 #endif /* DEBUG */
 
-	/* reuse part of the header memory */
-	id = mbuf_mtod(pkt, struct ip_tuple *);
-	id->src_ip = ntoh32(iphdr->src_addr.addr);
-	id->dst_ip = ntoh32(iphdr->dst_addr.addr);
-	id->src_port = ntoh16(udphdr->src_port);
-	id->dst_port = ntoh16(udphdr->dst_port);
-	pkt->done = (void *) 0xDEADBEEF;
-
-        serve(data, len, id);
-        //FIXME We do not need to notify userspace here.
-	//usys_udp_recv(mbuf_to_iomap(pkt, data), len, mbuf_to_iomap(pkt, id));
+        uint16_t dst_port = ntoh16(udphdr->dst_port);
+        for (i = 0; i < CFG.num_ports; i++)
+                if (dst_port == CFG.ports[i])
+                        return i;
+        return -1;
 }
 
 static int udp_output(struct mbuf *__restrict pkt,

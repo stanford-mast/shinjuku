@@ -58,8 +58,10 @@ void do_networking(void)
                         mbuf_free(networker_pointers.pkts[i]);
                 }
                 networker_pointers.free_cnt = 0;
-                for (i = 0; i < num_recv; i++)
+                for (i = 0; i < num_recv; i++) {
                         networker_pointers.pkts[i] = recv_mbufs[i];
+                        networker_pointers.types[i] = (uint8_t) recv_type[i];
+                }
                 networker_pointers.cnt = num_recv;
         }
 }

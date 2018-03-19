@@ -36,12 +36,13 @@
 #define ETH_DEV_RX_QUEUE_SZ     512
 #define ETH_DEV_TX_QUEUE_SZ     4096
 #define ETH_RX_MAX_DEPTH	32768
-#define ETH_RX_MAX_BATCH        7
+#define ETH_RX_MAX_BATCH        6
 
 DECLARE_PERCPU(int, eth_num_queues);
 
 struct eth_rx_queue * eth_rxqs[NETHDEV];
 struct mbuf * recv_mbufs[ETH_RX_MAX_BATCH];
+int recv_type[ETH_RX_MAX_BATCH];
 
 /*
  * Receive Queue API
@@ -116,7 +117,7 @@ static inline int eth_process_recv_queue(struct eth_rx_queue *rxq, struct mbuf *
  */
 static inline int eth_process_recv(void)
 {
-        int i, count = 0;
+        int i, type, count = 0;
         bool empty;
         struct mbuf * pos;
 
@@ -129,8 +130,10 @@ static inline int eth_process_recv(void)
                 empty = true;
                 for (i = 0; i < percpu_get(eth_num_queues); i++) {
                         struct eth_rx_queue *rxq = eth_rxqs[i];
-                        if (!eth_process_recv_queue(rxq, &pos)) {
+                        type = eth_process_recv_queue(rxq, &pos);
+                        if (type >= 0) {
                                 recv_mbufs[count] = pos;
+                                recv_type[count] = type;
                                 count++;
                                 empty = false;
                         }
