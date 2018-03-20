@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <ucontext.h>
 
+#include <ix/cfg.h>
 #include <ix/mempool.h>
 #include <ix/ethqueue.h>
 
@@ -108,7 +109,7 @@ struct task_queue
         struct task * tail;
 };
         
-struct task_queue tskq;
+struct task_queue tskq[CFG_MAX_PORTS];
 
 static inline void tskq_enqueue_head(struct task_queue * tq, void * rnbl,
                                      void * mbuf, uint8_t type,
@@ -171,6 +172,19 @@ static inline int tskq_dequeue(struct task_queue * tq, void ** rnbl_ptr,
         if (tq->head == NULL)
                 tq->tail = NULL;
         return 0;
+}
+
+static inline int naive_tskq_dequeue(struct task_queue * tq, void ** rnbl_ptr,
+                                     void ** mbuf, uint8_t *type,
+                                     uint8_t *category, uint64_t *timestamp)
+{
+        int i;
+        for (i = 0; i < CFG.num_ports; i++) {
+                if(tskq_dequeue(&tq[i], rnbl_ptr, mbuf, type, category,
+                                timestamp) == 0)
+                        return 0;
+        }
+        return -1;
 }
 
 uint64_t timestamps[MAX_WORKERS];

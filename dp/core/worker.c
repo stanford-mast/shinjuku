@@ -53,7 +53,6 @@
 #include <net/udp.h>
 #include <net/ethernet.h>
 
-#define DELAY 75000
 #define PREEMPT_VECTOR 0xf2
 
 __thread ucontext_t uctx_main;
@@ -148,7 +147,7 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
         start64 = rdtsc();
         do {
                 end64 = rdtsc();
-        } while ((end64 - start64) / 2.7 < req->runNs);
+        } while (((end64 - start64) / 2.5) < req->runNs);
 
         sending = true;
         ret = udp_send((void *)resp, sizeof(struct response), &new_id,

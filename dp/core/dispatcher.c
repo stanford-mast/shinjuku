@@ -77,21 +77,20 @@ void do_dispatching(int num_cpus)
                                         preempt_check[i] = false;
                                         worker_responses[i].flag = PROCESSED;
                                 } else if (worker_responses[i].flag == PREEMPTED) {
-                                        log_info("I cannot be preempted\n");
                                         rnbl = worker_responses[i].rnbl;
                                         mbuf = worker_responses[i].mbuf;
                                         category = worker_responses[i].category;
                                         type = worker_responses[i].type;
                                         timestamp = worker_responses[i].timestamp;
-                                        tskq_enqueue_tail(&tskq, rnbl, mbuf,
+                                        tskq_enqueue_tail(&tskq[type], rnbl, mbuf,
                                                           type, category,
                                                           timestamp);
                                         preempt_check[i] = false;
                                         worker_responses[i].flag = PROCESSED;
                                 }
 
-                                if(tskq_dequeue(&tskq, &rnbl, &mbuf, &type,
-                                                &category, &timestamp))
+                                if(naive_tskq_dequeue(tskq, &rnbl, &mbuf, &type,
+                                                      &category, &timestamp))
                                         break;
                                 worker_responses[i].flag = RUNNING;
                                 dispatcher_requests[i].rnbl = rnbl;
@@ -102,7 +101,7 @@ void do_dispatching(int num_cpus)
                                 timestamps[i] = cur_time;
                                 preempt_check[i] = true;
                                 dispatcher_requests[i].flag = ACTIVE;
-                        } else if ((preempt_check[i] && cur_time - timestamps[i]) / 2.7 > PREEMPTION_DELAY) {
+                        } else if (preempt_check[i] && (((cur_time - timestamps[i]) / 2.5) > PREEMPTION_DELAY)) {
                                 // Avoid preempting more times.
                                 preempt_check[i] = false;
                                 dune_apic_send_posted_ipi(PREEMPT_VECTOR,
@@ -110,10 +109,11 @@ void do_dispatching(int num_cpus)
                         }
                 }
                 if (networker_pointers.cnt != 0) {
-                        for (i = 0; i < networker_pointers.cnt; i++)
-                                tskq_enqueue_tail(&tskq, NULL, (void *)networker_pointers.pkts[i],
-                                                  networker_pointers.types[i],
-                                                  PACKET, cur_time);
+                        for (i = 0; i < networker_pointers.cnt; i++) {
+                                type = networker_pointers.types[i];
+                                tskq_enqueue_tail(&tskq[type], NULL, (void *)networker_pointers.pkts[i],
+                                                  type, PACKET, cur_time);
+                        }
                         // FIXME return here even if network_pointers.cnt is 0
                         for (i = 0; i < ETH_RX_MAX_BATCH; i++) {
                                 struct mbuf * buf = mbuf_dequeue(&mqueue);
