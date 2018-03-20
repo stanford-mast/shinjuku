@@ -347,7 +347,7 @@ static int ixgbe_rx_poll(struct eth_rx_queue *rx)
 		rxdp->read.pkt_addr = cpu_to_le32(maddr);
 
 		if (unlikely(!valid_checksum || eth_recv(rx, b))) {
-			log_info("ixgbe: dropping packet\n");
+			log_debug("ixgbe: dropping packet\n");
 			mbuf_free(b);
 		}
 
