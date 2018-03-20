@@ -57,6 +57,9 @@ struct cfg_parameters {
 	int num_ports;
 	uint16_t ports[CFG_MAX_PORTS];
 
+	int num_slos;
+	float slos[CFG_MAX_PORTS];
+
 	char loader_path[256];
 };
 

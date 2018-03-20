@@ -89,8 +89,10 @@ void do_dispatching(int num_cpus)
                                         worker_responses[i].flag = PROCESSED;
                                 }
 
-                                if(naive_tskq_dequeue(tskq, &rnbl, &mbuf, &type,
-                                                      &category, &timestamp))
+                                if(smart_tskq_dequeue(tskq, &rnbl, &mbuf, &type,
+                                                      &category, &timestamp, cur_time))
+                                //if(naive_tskq_dequeue(tskq, &rnbl, &mbuf, &type,
+                                //                      &category, &timestamp))
                                         break;
                                 worker_responses[i].flag = RUNNING;
                                 dispatcher_requests[i].rnbl = rnbl;

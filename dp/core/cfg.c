@@ -60,6 +60,7 @@ static char config_file[256];
 
 static int parse_host_addr(void);
 static int parse_port(void);
+static int parse_slo(void);
 static int parse_gateway_addr(void);
 static int parse_arp(void);
 static int parse_devices(void);
@@ -74,6 +75,7 @@ struct config_vector_t {
 static struct config_vector_t config_tbl[] = {
 	{ "host_addr",    parse_host_addr},
 	{ "port",         parse_port},
+	{ "slo",          parse_slo},
 	{ "gateway_addr", parse_gateway_addr},
 	{ "arp",          parse_arp},
 	{ "devices",      parse_devices},
@@ -188,6 +190,35 @@ static int parse_port(void)
 		port = 0;
 		port = config_setting_get_int_elem(ports, CFG.num_ports);
 		ret = add_port(port);
+		if (ret)
+			return ret;
+	}
+	return 0;
+}
+
+static int add_slo(int slo)
+{
+	CFG.slos[CFG.num_slos] = 2.5 * slo;
+	++CFG.num_slos;
+	return 0;
+}
+
+static int parse_slo(void)
+{
+	const config_setting_t *slos = NULL;
+	int slo, ret;
+
+	slos = config_lookup(&cfg, "slo");
+	if (!slos)
+		return -EINVAL;
+	slo = config_setting_get_int(slos);
+	if (slo)
+		return add_slo(slo);
+	CFG.num_slos = 0;
+	while (CFG.num_slos < CFG_MAX_PORTS && CFG.num_slos < config_setting_length(slos)) {
+		slo = 0;
+		slo = config_setting_get_int_elem(slos, CFG.num_slos);
+		ret = add_slo(slo);
 		if (ret)
 			return ret;
 	}

@@ -1,3 +1,4 @@
+#include <limits.h>
 #include <stdint.h>
 #include <ucontext.h>
 
@@ -174,6 +175,14 @@ static inline int tskq_dequeue(struct task_queue * tq, void ** rnbl_ptr,
         return 0;
 }
 
+static inline uint64_t get_queue_timestamp(struct task_queue * tq, uint64_t * timestamp)
+{
+        if (tq->head == NULL)
+            return -1;
+        (*timestamp) = tq->head->timestamp;
+        return 0;
+}
+
 static inline int naive_tskq_dequeue(struct task_queue * tq, void ** rnbl_ptr,
                                      void ** mbuf, uint8_t *type,
                                      uint8_t *category, uint64_t *timestamp)
@@ -183,6 +192,36 @@ static inline int naive_tskq_dequeue(struct task_queue * tq, void ** rnbl_ptr,
                 if(tskq_dequeue(&tq[i], rnbl_ptr, mbuf, type, category,
                                 timestamp) == 0)
                         return 0;
+        }
+        return -1;
+}
+
+static inline int smart_tskq_dequeue(struct task_queue * tq, void ** rnbl_ptr,
+                                     void ** mbuf, uint8_t *type,
+                                     uint8_t *category, uint64_t *timestamp,
+                                     uint64_t cur_time)
+{
+        int i, ret;
+        uint64_t queue_stamp;
+        int index = -1;
+        double max = 0;
+
+        for (i = 0; i < CFG.num_ports; i++) {
+                ret = get_queue_timestamp(&tq[i], &queue_stamp);
+                if (ret)
+                        continue;
+
+                int64_t diff = cur_time - queue_stamp;
+                double current = diff / CFG.slos[i];
+                if (current > max) {
+                        max = current;
+                        index = i;
+                }
+        }
+
+        if (index != -1) {
+                return tskq_dequeue(&tq[index], rnbl_ptr, mbuf, type, category,
+                                    timestamp);
         }
         return -1;
 }
