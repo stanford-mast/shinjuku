@@ -57,7 +57,6 @@
 
 __thread ucontext_t uctx_main;
 __thread ucontext_t * cont;
-__thread volatile uint8_t sending;
 __thread volatile uint8_t finished;
 
 DEFINE_PERCPU(struct mempool, response_pool __attribute__((aligned(64))));
@@ -105,11 +104,9 @@ int response_init_cpu(void)
 
 static void test_handler(struct dune_tf *tf)
 {
+        asm volatile ("cli":::);
         dune_apic_eoi();
-        if (!sending) {
-                sending = true;
-                swapcontext_fast(cont, &uctx_main);
-        }
+        swapcontext_fast(cont, &uctx_main);
 }
 
 /**
@@ -121,7 +118,7 @@ static void test_handler(struct dune_tf *tf)
 static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
                          uint32_t lsw_id)
 {
-        sending = false;
+        asm volatile ("sti":::);
 
         struct ip_tuple * id = (struct ip_tuple *) ((uint64_t) msw_id << 32 | lsw_id);
         void * data = (void *)((uint64_t) msw << 32 | lsw);
@@ -131,7 +128,7 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
         if (!resp) {
                 log_warn("Cannot allocate response buffer\n");
                 finished = 1;
-                swapcontext_very_fast(cont, &uctx_main);
+                swapcontext_fast(cont, &uctx_main);
         }
 
         struct request * req = (struct request *) data;
@@ -149,14 +146,14 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
                 end64 = rdtsc();
         } while (((end64 - start64) / 2.5) < req->runNs);
 
-        sending = true;
+        asm volatile ("cli":::);
         ret = udp_send((void *)resp, sizeof(struct response), &new_id,
                        (uint64_t) resp);
         if (ret)
                 log_warn("udp_send failed with error %d\n", ret);
 
         finished = true;
-        swapcontext_very_fast(cont, &uctx_main);
+        swapcontext_fast(cont, &uctx_main);
 }
 
 static void parse_packet(struct mbuf * pkt, void ** data_ptr,
@@ -192,17 +189,16 @@ void do_work(void)
         struct mbuf * pkt;
         void * data;
         struct ip_tuple * id;
-        sending = true;
 
         int cpu_nr_ = percpu_get(cpu_nr) - 2;
         worker_responses[cpu_nr_].flag = PROCESSED;
         dune_register_intr_handler(PREEMPT_VECTOR, test_handler);
         eth_process_reclaim();
+        asm volatile ("cli":::);
 
         log_info("do_work: Waiting for dispatcher work\n");
         while (1) {
                 uint8_t allocated = true;
-                sending = true;
                 if (data) {
                         eth_process_reclaim();
                         eth_process_send();
@@ -220,18 +216,17 @@ void do_work(void)
                                 cont = context_alloc(&percpu_get(context_pool),
                                                      &percpu_get(stack_pool));
                                 if (unlikely(!cont)) {
-                                        log_err("do_work: cannot allocated context\n");
+                                        log_err("do_work: cannot allocate context\n");
                                         exit(-1);
                                 }
                                 set_context_link(cont, &uctx_main);
                                 makecontext(cont, generic_work, 4, msw, lsw, msw_id, lsw_id);
                                 finished = false;
-                                ret = swapcontext_very_fast(&uctx_main, cont);
+                                ret = swapcontext_fast(&uctx_main, cont);
                                 if (ret) {
                                         log_err("do_work: failed to do swapcontext_fast\n");
                                         exit(-1);
                                 }
-                                finished = true;
                         } else {
                                 finished = true;
                                 allocated = false;
@@ -244,14 +239,15 @@ void do_work(void)
                                 log_err("do_work: failed to swap to existing context\n");
                                 exit(-1);
                         }
-                        finished = true;
                 }
                 worker_responses[cpu_nr_].timestamp = \
                                 dispatcher_requests[cpu_nr_].timestamp;
                 worker_responses[cpu_nr_].type = \
                                 dispatcher_requests[cpu_nr_].type;
-                worker_responses[cpu_nr_].mbuf = pkt;
+                worker_responses[cpu_nr_].mbuf = \
+                                dispatcher_requests[cpu_nr_].mbuf;
                 if (finished) {
+                        allocated = true;
                         if (allocated) {
                                 context_free(cont, &percpu_get(context_pool),
                                              &percpu_get(stack_pool));
