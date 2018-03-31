@@ -31,49 +31,44 @@
 
 #include <ix/mempool.h>
 
-struct mempool_datastore stack_datastore;
 struct mempool_datastore context_datastore;
+struct mempool context_pool __attribute((aligned(64)));
+struct mempool_datastore stack_datastore;
+struct mempool stack_pool __attribute((aligned(64)));
 
 extern int getcontext_fast(ucontext_t *ucp);
 
 /**
- * context_alloc - allocates a ucontext_t with its stack
- * @context_mempool: pool for ucontext_t
- * @stack_mempool: pool for each context's stack
+ * context_alloc - allocates a ucontext_t and its stack
+ * @cont: pointer to the pointer of the allocated context
  *
- * Returns a ucontext_t with its stack initialized, or NULL if failure.
+ * Returns 0 on success, -1 if failure.
  */
-static inline ucontext_t *context_alloc(struct mempool *context_mempool,
-                                        struct mempool *stack_mempool)
+static inline int context_alloc(ucontext_t ** cont)
 {
-    ucontext_t * cont = mempool_alloc(context_mempool);
-    if (unlikely(!cont))
-        return NULL;
+    (*cont) = mempool_alloc(&context_pool);
+    if (unlikely(!(*cont)))
+        return -1;
 
-    char * stack = mempool_alloc(stack_mempool);
+    void * stack = mempool_alloc(&stack_pool);
     if (unlikely(!stack)) {
-        mempool_free(context_mempool, cont);
-        return NULL;
+        mempool_free(&context_pool, (*cont));
+        return -1;
     }
 
-    getcontext_fast(cont);
-    cont->uc_stack.ss_sp = stack;
-    cont->uc_stack.ss_size = sizeof(stack);
-    return cont;
-    // FIXME Need to know function here and call makecontext?
+    (*cont)->uc_stack.ss_sp = stack;
+    (*cont)->uc_stack.ss_size = sizeof(stack);
+    return 0;
 }
 
 /**
  * context_free - frees a context and the associated stack
  * @c: the context
- * @context_mempool: pool used to allocate ucontext_t
- * @stack_mempool: pool used to allocate  each context's stack
  */
-static inline void context_free(ucontext_t *c, struct mempool *context_mempool,
-                                struct mempool *stack_mempool)
+static inline void context_free(ucontext_t *c)
 {
-    mempool_free(stack_mempool, c->uc_stack.ss_sp);
-    mempool_free(context_mempool, c);
+    mempool_free(&stack_pool, c->uc_stack.ss_sp);
+    mempool_free(&context_pool, c);
 }
 
 /**

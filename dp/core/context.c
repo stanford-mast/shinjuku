@@ -30,12 +30,21 @@
 #include <ix/context.h>
 #include <ix/mempool.h>
 
-DEFINE_PERCPU(struct mempool, context_pool __attribute__((aligned(64))));
-DEFINE_PERCPU(struct mempool, stack_pool __attribute__((aligned(64))));
-
 #define CONTEXT_CAPACITY    768*1024
 #define STACK_CAPACITY      768*1024
 #define STACK_SIZE          2048
+
+static int context_init_mempool(void)
+{
+        struct mempool *m = &context_pool;
+        return mempool_create(m, &context_datastore, MEMPOOL_SANITY_GLOBAL, 0);
+}
+
+static int stack_init_mempool(void)
+{
+        struct mempool *m = &stack_pool;
+        return mempool_create(m, &stack_datastore, MEMPOOL_SANITY_GLOBAL, 0);
+}
 
 /**
  * context_init - allocates global context and stack datastores
@@ -50,26 +59,16 @@ int context_init(void)
         if (ret)
                 return ret;
 
-        ret = mempool_create_datastore(&stack_datastore, STACK_CAPACITY,
-                                       STACK_SIZE, 1, MEMPOOL_DEFAULT_CHUNKSIZE,
-                                       "context");
-        return ret;
-}
-
-/*
- * context_init_cpu - allocate per cpu context and stack mempools
- */
-int context_init_cpu(void)
-{
-        int ret;
-
-	struct mempool *m = &percpu_get(context_pool);
-	ret = mempool_create(m, &context_datastore, MEMPOOL_SANITY_PERCPU,
-                             percpu_get(cpu_id));
+        ret = context_init_mempool();
         if (ret)
                 return ret;
 
-        m = &percpu_get(stack_pool);
-        return mempool_create(m, &stack_datastore, MEMPOOL_SANITY_PERCPU,
-                              percpu_get(cpu_id));
+        ret = mempool_create_datastore(&stack_datastore, STACK_CAPACITY,
+                                       STACK_SIZE, 1, MEMPOOL_DEFAULT_CHUNKSIZE,
+                                       "stack");
+        if (ret)
+                return ret;
+
+        ret = stack_init_mempool();
+        return ret;
 }

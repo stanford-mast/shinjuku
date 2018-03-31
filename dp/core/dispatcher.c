@@ -28,6 +28,7 @@
  */
 
 #include <ix/cfg.h>
+#include <ix/context.h>
 #include <ix/dispatch.h>
 
 extern void dune_apic_send_posted_ipi(uint8_t vector, uint32_t dest_core);
@@ -53,6 +54,7 @@ static inline void handle_finished(int i)
 {
         if (worker_responses[i].mbuf == NULL)
                 log_warn("No mbuf was returned from worker\n");
+        context_free(worker_responses[i].rnbl);
         mbuf_enqueue(&mqueue, (struct mbuf *) worker_responses[i].mbuf);
         preempt_check[i] = false;
         worker_responses[i].flag = PROCESSED;
@@ -118,13 +120,20 @@ static inline void handle_worker(int i, uint64_t cur_time)
 
 static inline void handle_networker(uint64_t cur_time)
 {
-        int i;
+        int i, ret;
         uint8_t type;
+        ucontext_t * cont;
 
         if (networker_pointers.cnt != 0) {
                 for (i = 0; i < networker_pointers.cnt; i++) {
+                        ret = context_alloc(&cont);
+                        if (unlikely(ret)) {
+                                log_warn("Cannot allocate context\n");
+                                mbuf_enqueue(&mqueue, (struct mbuf *) networker_pointers.pkts[i]);
+                                continue;
+                        }
                         type = networker_pointers.types[i];
-                        tskq_enqueue_tail(&tskq[type], NULL,
+                        tskq_enqueue_tail(&tskq[type], cont,
                                           (void *)networker_pointers.pkts[i],
                                           type, PACKET, cur_time);
                 }

@@ -62,9 +62,6 @@ __thread volatile uint8_t finished;
 
 DEFINE_PERCPU(struct mempool, response_pool __attribute__((aligned(64))));
 
-DECLARE_PERCPU(struct mempool, context_pool);
-DECLARE_PERCPU(struct mempool, stack_pool);
-
 extern int getcontext_fast(ucontext_t *ucp);
 extern int swapcontext_fast(ucontext_t *ouctx, ucontext_t *uctx);
 extern int swapcontext_very_fast(ucontext_t *ouctx, ucontext_t *uctx);
@@ -125,21 +122,7 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
         void * data = (void *)((uint64_t) msw << 32 | lsw);
         int ret;
 
-        struct response * resp = mempool_alloc(&percpu_get(response_pool));
-        if (!resp) {
-                log_warn("Cannot allocate response buffer\n");
-                finished = 1;
-                swapcontext_fast(cont, &uctx_main);
-        }
-
         struct request * req = (struct request *) data;
-        resp->genNs = req->genNs;
-        struct ip_tuple new_id = {
-                .src_ip = id->dst_ip,
-                .dst_ip = id->src_ip,
-                .src_port = id->dst_port,
-                .dst_port = id->src_port
-        };
 
         uint64_t start64, end64;
         start64 = rdtsc();
@@ -148,6 +131,22 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
         } while (((end64 - start64) / 2.5) < req->runNs);
 
         asm volatile ("cli":::);
+
+        struct response * resp = mempool_alloc(&percpu_get(response_pool));
+        if (!resp) {
+                log_warn("Cannot allocate response buffer\n");
+                finished = true;
+                swapcontext_fast(cont, &uctx_main);
+        }
+
+        resp->genNs = req->genNs;
+        struct ip_tuple new_id = {
+                .src_ip = id->dst_ip,
+                .dst_ip = id->src_ip,
+                .src_port = id->dst_port,
+                .dst_port = id->src_port
+        };
+
         ret = udp_send((void *)resp, sizeof(struct response), &new_id,
                        (uint64_t) resp);
         if (ret)
@@ -205,12 +204,8 @@ static inline void handle_new_packet(void)
                 uint32_t lsw = (uint64_t) data & 0x00000000FFFFFFFF;
                 uint32_t msw_id = ((uint64_t) id & 0xFFFFFFFF00000000) >> 32;
                 uint32_t lsw_id = (uint64_t) id & 0x00000000FFFFFFFF;
-                cont = context_alloc(&percpu_get(context_pool),
-                                     &percpu_get(stack_pool));
-                if (unlikely(!cont)) {
-                        log_err("Cannot allocate context\n");
-                        exit(-1);
-                }
+                cont = dispatcher_requests[cpu_nr_].rnbl;
+                getcontext_fast(cont);
                 set_context_link(cont, &uctx_main);
                 makecontext(cont, (void (*)(void)) generic_work, 4, msw, lsw,
                             msw_id, lsw_id);
@@ -221,8 +216,8 @@ static inline void handle_new_packet(void)
                         exit(-1);
                 }
         } else {
+                log_info("OOPS No Data\n");
                 finished = true;
-                //allocated = false;
         }
 }
 
@@ -257,17 +252,11 @@ static inline void finish_request(void)
                         dispatcher_requests[cpu_nr_].type;
         worker_responses[cpu_nr_].mbuf = \
                         dispatcher_requests[cpu_nr_].mbuf;
+        worker_responses[cpu_nr_].rnbl = cont;
+        worker_responses[cpu_nr_].category = CONTEXT;
         if (finished) {
-                bool allocated = true;
-                if (allocated) {
-                        context_free(cont, &percpu_get(context_pool),
-                                     &percpu_get(stack_pool));
-                }
-                worker_responses[cpu_nr_].category = PACKET;
                 worker_responses[cpu_nr_].flag = FINISHED;
         } else {
-                worker_responses[cpu_nr_].rnbl = cont;
-                worker_responses[cpu_nr_].category = CONTEXT;
                 worker_responses[cpu_nr_].flag = PREEMPTED;
         }
 }
