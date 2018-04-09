@@ -104,7 +104,7 @@ static void test_handler(struct dune_tf *tf)
 {
         asm volatile ("cli":::);
         dune_apic_eoi();
-        swapcontext_fast(cont, &uctx_main);
+        swapcontext_fast_to_control(cont, &uctx_main);
 }
 
 /**
