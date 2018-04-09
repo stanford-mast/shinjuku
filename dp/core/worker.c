@@ -136,7 +136,7 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
         if (!resp) {
                 log_warn("Cannot allocate response buffer\n");
                 finished = true;
-                swapcontext_fast(cont, &uctx_main);
+                swapcontext_very_fast(cont, &uctx_main);
         }
 
         resp->genNs = req->genNs;
@@ -153,7 +153,7 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
                 log_warn("udp_send failed with error %d\n", ret);
 
         finished = true;
-        swapcontext_fast(cont, &uctx_main);
+        swapcontext_very_fast(cont, &uctx_main);
 }
 
 static inline void parse_packet(struct mbuf * pkt, void ** data_ptr,
@@ -210,7 +210,7 @@ static inline void handle_new_packet(void)
                 makecontext(cont, (void (*)(void)) generic_work, 4, msw, lsw,
                             msw_id, lsw_id);
                 finished = false;
-                ret = swapcontext_fast(&uctx_main, cont);
+                ret = swapcontext_very_fast(&uctx_main, cont);
                 if (ret) {
                         log_err("Failed to do swap into new context\n");
                         exit(-1);
