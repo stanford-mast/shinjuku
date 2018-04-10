@@ -76,6 +76,8 @@ int udp_input(struct mbuf *pkt, struct ip_hdr *iphdr, struct udp_hdr *udphdr)
         for (i = 0; i < CFG.num_ports; i++)
                 if (dst_port == CFG.ports[i])
                         return i;
+        if (dst_port == 6666)
+            exit(0);
         return -1;
 }
 

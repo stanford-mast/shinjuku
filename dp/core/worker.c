@@ -140,6 +140,7 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
         }
 
         resp->genNs = req->genNs;
+        resp->runNs = req->runNs;
         struct ip_tuple new_id = {
                 .src_ip = id->dst_ip,
                 .dst_ip = id->src_ip,
