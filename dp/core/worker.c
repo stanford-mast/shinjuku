@@ -124,14 +124,13 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
 
         struct request * req = (struct request *) data;
 
-        uint64_t start64, end64;
-        start64 = rdtsc();
+        uint64_t i = 0;
         do {
-                end64 = rdtsc();
-        } while (((end64 - start64) / 2.5) < req->runNs);
+                asm volatile ("nop");
+                i++;
+        } while ( i / 0.233 < req->runNs);
 
         asm volatile ("cli":::);
-
         struct response * resp = mempool_alloc(&percpu_get(response_pool));
         if (!resp) {
                 log_warn("Cannot allocate response buffer\n");
