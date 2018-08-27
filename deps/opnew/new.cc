@@ -4,26 +4,15 @@
 #include <new>
 
 
-extern uint8_t flag;
-
 void *
 operator new(size_t sz)
 {
-  if (flag)
-    asm volatile("cli":::);
+  asm volatile("cli":::);
   void *ret = malloc(sz);
   if (!ret) {
-    if (flag)
-      asm volatile("sti":::);
     throw std::bad_alloc();
   }
-  if (flag)
-    asm volatile("sti":::);
   return ret;
-}
-
-uint8_t * get_flag() {
-  return &flag;
 }
 
 void *
@@ -35,11 +24,9 @@ operator new[](size_t sz)
 void
 operator delete(void *p)
 {
-  if (flag)
-    asm volatile("cli":::);
+  asm volatile("cli":::);
   free(p);
-  if (flag)
-    asm volatile("sti":::);
+  asm volatile("sti":::);
 }
 
 void
