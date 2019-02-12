@@ -10,6 +10,4 @@
 /deps/pcidma
 /shinjuku.conf
 /dp/shinjuku
-/apps/echoclient
-/apps/echoserver
-/apps/udpserver
+/client/latency_client
