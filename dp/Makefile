@@ -1,4 +1,4 @@
-# Copyright 2013-16 Board of Trustees of Stanford University
+# Copyright 2013-19 Board of Trustees of Stanford University
 # Copyright 2013-16 Ecole Polytechnique Federale Lausanne (EPFL)
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -19,7 +19,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-# A Makefile for IX.
+# A Makefile for Shinjuku.
 #
 # path for this Makefile to work properly.
 
@@ -55,7 +55,7 @@ include $(patsubst %, %/dir.mk, $(DIRS))
 %.generated.S: %.c
 	$(CC) $(CFLAGS) -o $@ -S $<
 
-all: ix
+all: shinjuku
 
 OBJS=$(subst .c,.o,$(SRCS))
 
@@ -79,12 +79,12 @@ DPDK_LIBS+=$(DPDK)/build/lib/librte_eal.a
 DPDK_LIBS+=$(DPDK)/build/lib/librte_mempool.a
 DPDK_LIBS+=$(DPDK)/build/lib/librte_ring.a
 
-ix: $(DEPENDENCY) $(OBJS) $(DUNE_LIB) ix.ld
-	$(LD) $(LDFLAGS) -o ix $(OBJS) $(DUNE_LIB) $(DPDK_LIBS) $(LDLIBS)
+shinjuku: $(DEPENDENCY) $(OBJS) $(DUNE_LIB) ix.ld
+	$(LD) $(LDFLAGS) -o shinjuku $(OBJS) $(DUNE_LIB) $(DPDK_LIBS) $(LDLIBS)
 
 clean:
 	cp core/context_fast.S /tmp/context_fast.S
-	rm -f $(OBJS) ix .depend
+	rm -f $(OBJS) shinjuku .depend
 	cp /tmp/context_fast.S core/context_fast.S
 
 dist-clean: clean

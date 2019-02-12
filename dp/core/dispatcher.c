@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Board of Trustees of Stanford University
+ * Copyright 2018-19 Board of Trustees of Stanford University
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal

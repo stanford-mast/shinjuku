@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-16 Board of Trustees of Stanford University
+ * Copyright 2013-19 Board of Trustees of Stanford University
  * Copyright 2013-16 Ecole Polytechnique Federale Lausanne (EPFL)
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -48,7 +48,7 @@
 #include <net/ip.h>
 #include <ix/ethdev.h>
 
-#define DEFAULT_CONF_FILE "./ix.conf"
+#define DEFAULT_CONF_FILE "./shinjuku.conf"
 
 struct cfg_parameters CFG;
 

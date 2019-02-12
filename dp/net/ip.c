@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-16 Board of Trustees of Stanford University
+ * Copyright 2013-19 Board of Trustees of Stanford University
  * Copyright 2013-16 Ecole Polytechnique Federale Lausanne (EPFL)
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -114,11 +114,6 @@ out:
         return -1;
 }
 
-static struct eth_ctx measure_ctx = {
-    .received_total = 0,
-    .packets_total = 0,
-};
-
 /**
  * eth_input - process an ethernet packet
  * @pkt: the mbuf containing the packet
@@ -130,19 +125,6 @@ int eth_input(struct eth_rx_queue *rx_queue, struct mbuf *pkt)
 
 	log_debug("ip: got ethernet packet of len %ld, type %x\n",
 		  pkt->len, ntoh16(ethhdr->type));
-
-        /*
-	measure_ctx.received_total += pkt->len;
-	measure_ctx.packets_total += 1;
-	if (measure_ctx.packets_total > 10000000) {
-	    measure_ctx.packets_total = 0;
-	    clock_gettime(CLOCK_MONOTONIC, &now);
-	    printf("Time %lu sec, %ld nsec\n",
-		    now.tv_sec - measure_ctx.prev.tv_sec,
-		    now.tv_nsec - measure_ctx.prev.tv_nsec);
-	    measure_ctx.prev.tv_sec = now.tv_sec;
-	    measure_ctx.prev.tv_nsec = now.tv_nsec;
-	}*/
 
 	if (ethhdr->type == hton16(ETHTYPE_IP))
                 return ip_input(NULL, pkt, mbuf_nextd(ethhdr, struct ip_hdr *));

@@ -1,7 +1,0 @@
-*.la
-*.lo
-*.o
-*~
-/.libs
-/dest
-newtest

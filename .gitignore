@@ -8,8 +8,8 @@
 /deps/dpdk
 /deps/dune
 /deps/pcidma
-/ix.conf
-/dp/ix
+/shinjuku.conf
+/dp/shinjuku
 /apps/echoclient
 /apps/echoserver
 /apps/udpserver

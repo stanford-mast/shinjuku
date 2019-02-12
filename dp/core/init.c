@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-16 Board of Trustees of Stanford University
+ * Copyright 2013-19 Board of Trustees of Stanford University
  * Copyright 2013-16 Ecole Polytechnique Federale Lausanne (EPFL)
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -109,14 +109,10 @@ static struct init_vector_t init_tbl[] = {
 	{ "timer",   timer_init,   timer_init_cpu, NULL},
 	{ "net",     net_init,     NULL, NULL},
 	{ "cfg",     init_cfg,     NULL, NULL},              // after net
-	{ "cp",      cp_init,      NULL, NULL},
 	{ "dpdk",    dpdk_init,    NULL, NULL},
 	{ "firstcpu", init_firstcpu, NULL, NULL},             // after cfg
 	{ "mbuf",    mbuf_init,    mbuf_init_cpu, NULL},      // after firstcpu
 	{ "taskqueue", taskqueue_init, NULL, NULL},      // after firstcpu
-	{ "memp",    memp_init,    memp_init_cpu, NULL},
-	{ "tcpapi",  tcp_api_init, tcp_api_init_cpu, NULL},
-	{ "migration", NULL, init_migration_cpu, NULL},
 	{ "response", response_init, response_init_cpu, NULL},
 	{ "context", context_init, NULL},
         { "ethdev", init_ethdev, NULL, NULL},
@@ -317,8 +313,6 @@ void *start_cpu(void *arg)
 	/* percpu_get(cp_cmd) of the first CPU is initialized in init_hw. */
 
 	percpu_get(cpu_nr) = cpu_nr_;
-	percpu_get(cp_cmd) = &cp_shmem->command[started_cpus];
-	percpu_get(cp_cmd)->cpu_state = CP_CPU_STATE_RUNNING;
 
         log_info("start_cpu: starting cpu-specific work\n");
         if (cpu_nr_ == 1) {
@@ -363,8 +357,6 @@ static int init_hw(void)
 	}
 
 	percpu_get(cpu_nr) = 0;
-	percpu_get(cp_cmd) = &cp_shmem->command[0];
-	percpu_get(cp_cmd)->cpu_state = CP_CPU_STATE_RUNNING;
 
 	for (i = 1; i < CFG.num_cpus; i++) {
 		ret = pthread_create(&tid, NULL, start_cpu, (void *)(unsigned long) i);
@@ -401,29 +393,16 @@ static int init_cfg(void)
 static int init_firstcpu(void)
 {
 	int ret;
-	unsigned long msr_val;
-	unsigned int value;
-	int i;
 
-	cpus_active = CFG.num_cpus;
-	cp_shmem->nr_cpus = CFG.num_cpus;
 	if (CFG.num_cpus > 1) {
 		pthread_barrier_init(&start_barrier, NULL, CFG.num_cpus);
 	}
-
-	for (i = 0; i < CFG.num_cpus; i++)
-		cp_shmem->cpu[i] = CFG.cpu[i];
 
 	ret = cpu_init_one(CFG.cpu[0]);
 	if (ret) {
 		log_err("init: failed to initialize CPU 0\n");
 		return ret;
 	}
-
-
-	msr_val = rdmsr(MSR_RAPL_POWER_UNIT);
-	value = (msr_val & ENERGY_UNIT_MASK) >> ENERGY_UNIT_OFFSET;
-	energy_unit = 1.0 / (1 << value);
 
 	return ret;
 }
@@ -434,7 +413,7 @@ int main(int argc, char *argv[])
 	init_argc = argc;
 	init_argv = argv;
 
-	log_info("init: starting IX\n");
+	log_info("init: starting Shinjuku\n");
 
 	log_info("init: cpu phase\n");
 	for (i = 0; init_tbl[i].name; i++)
@@ -449,113 +428,7 @@ int main(int argc, char *argv[])
         log_info("init done\n");
 
         do_dispatching(CFG.num_cpus);
-        //dune_apic_send_posted_ipi(0,0);
-        // Waiting for one context to be executed so that both dispatcher and
-        // worker are ready.
-        
-        /*
-        while (worker_responses[1].flag == RUNNING);
-        worker_responses[1].flag = RUNNING;
-        dispatcher_requests[1].cont = context_alloc(&context_pool, &stack_pool);
-        dispatcher_requests[1].flag = ACTIVE;
-
-        while (worker_responses[2].flag == RUNNING);
-        worker_responses[2].flag = RUNNING;
-        dispatcher_requests[2].cont = context_alloc(&context_pool, &stack_pool);
-        dispatcher_requests[2].flag = ACTIVE;
-        */
-
-        /*
-        for (i = 1; i < MAX_WORKERS + 1; i++) {
-            while (worker_responses[i].flag == RUNNING);
-            worker_responses[i].flag = RUNNING;
-            dispatcher_requests[i].cont = context_alloc(&context_pool, &stack_pool);
-            dispatcher_requests[i].flag = ACTIVE;
-        }
-
-        while (worker_responses[4].flag == RUNNING);
-        worker_responses[4].flag = RUNNING;
-        dispatcher_requests[4].cont = context_alloc(&context_pool, &stack_pool);
-        dispatcher_requests[4].flag = ACTIVE;
-
-        while (worker_responses[5].flag == RUNNING);
-        worker_responses[5].flag = RUNNING;
-        dispatcher_requests[5].cont = context_alloc(&context_pool, &stack_pool);
-        dispatcher_requests[5].flag = ACTIVE;
-        */
-
-        /*
-        while (worker_responses[0].flag == RUNNING);
-        context_free(worker_responses[0].cont, &context_pool, &stack_pool);
-        */
-        /*
-    uint64_t foo[100000];
-    int flag = 0;
-    //clock_gettime(CLOCK_MONOTONIC, &start);
-    for (i = 0; i < 100000;) {
-        cpu_serialize();
-        start64 = rdtsc();
-
-        // Measure context allocation, dispatching, execution, and finish time.
-        for (j = 1; j < 6; j++) {
-            if (worker_responses[j].flag != RUNNING) {
-                //cpu_serialize();
-                //start64 = rdtsc();
-                context_free(worker_responses[j].cont, &context_pool, &stack_pool);
-                worker_responses[j].flag = RUNNING;
-                dispatcher_requests[j].cont = context_alloc(&context_pool, &stack_pool);
-                dispatcher_requests[j].flag = ACTIVE;
-                //end64 = rdtscp(NULL);
-                //foo[i++] = (end64 - start64) / 2.8;
-            }
-        }*/
-        //log_info("main: sent context to worker core\n");
-
-        // Measure context allocation and free time.
-        /*
-        dispatcher_requests[0].cont = context_alloc(&context_pool, &stack_pool);
-        context_free(dispatcher_requests[0].cont, &context_pool, &stack_pool);
-        */
-
-        //end64 = rdtscp(NULL);
-        //if (flag)
-        //foo[i++] = (end64 - start64) / 2.8;
-
-        //flag = 0;
-        //log_info("main: context full time: %lu ns\n",
-        //     (end64 - start64) / 2.8);
-    //}
-    //clock_gettime(CLOCK_MONOTONIC, &end);
-    //start64 = 10e9 * start.tv_sec + start.tv_nsec;
-    //end64 = 10e9 * end.tv_sec + end.tv_nsec;
-    //log_info("main: average context allocation time: %lu ns\n",
-    //        (end64 - start64) / 100000);
-    //for (i = 0; i < 100000; i++) {
-    //    printf("%lu\n", foo[i]);
-    //}
-    /*
-    log_info("main: starting benchmarking...\n");
-    clock_gettime(CLOCK_MONOTONIC, &start);
-    for (i = 0; i < 100000; i++) {
-        ucontext_t * cont = context_alloc(&context_pool, &stack_pool);
-        context_free(cont, &context_pool, &stack_pool);
-    }
-    clock_gettime(CLOCK_MONOTONIC, &end);
-
-    start64 = 10e9 * start.tv_sec + start.tv_nsec;
-    end64 = 10e9 * end.tv_sec + end.tv_nsec;
-    log_info("main: average context allocation time: %lu ns\n",
-             (end64 - start64) / 100000);
-
-    //context_free(cont, &context_pool, &stack_pool);*/
-    log_info("finished handling contexts, looping forever...\n");
-    while(1);
-	ret = sandbox_init(argc - args_parsed, &argv[args_parsed]);
-	if (ret) {
-		log_err("init: failed to start sandbox\n");
-		return ret;
-	}
-
+	log_info("finished handling contexts, looping forever...\n");
 	return 0;
 }
 

@@ -1,4 +1,4 @@
-# Copyright 2013-16 Board of Trustees of Stanford University
+# Copyright 2013-19 Board of Trustees of Stanford University
 # Copyright 2013-16 Ecole Polytechnique Federale Lausanne (EPFL)
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -19,12 +19,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-SUBDIRS = dp libix apps
+SUBDIRS = dp libix
 CLEANDIRS = $(SUBDIRS:%=clean-%)
 
 all: $(SUBDIRS)
-
-apps: libix
 
 $(SUBDIRS):
 	$(MAKE) -C $@

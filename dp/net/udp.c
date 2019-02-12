@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-16 Board of Trustees of Stanford University
+ * Copyright 2013-19 Board of Trustees of Stanford University
  * Copyright 2013-16 Ecole Polytechnique Federale Lausanne (EPFL)
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -46,10 +46,8 @@
 
 int udp_input(struct mbuf *pkt, struct ip_hdr *iphdr, struct udp_hdr *udphdr)
 {
-        int i;
-	void *data = mbuf_nextd(udphdr, void *);
+	int i;
 	uint16_t len = ntoh16(udphdr->len);
-	struct ip_tuple *id;
 
 	if (unlikely(!mbuf_enough_space(pkt, udphdr, len))) {
 		mbuf_free(pkt);
