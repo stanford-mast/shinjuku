@@ -147,8 +147,8 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
                 .dst_port = id->src_port
         };
 
-        ret = udp_send((void *)resp, sizeof(struct response), &new_id,
-                       (uint64_t) resp);
+        ret = udp_send_one((void *)resp, sizeof(struct response), &new_id,
+                           (uint64_t) resp);
         if (ret)
                 log_warn("udp_send failed with error %d\n", ret);
 

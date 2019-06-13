@@ -79,6 +79,71 @@ static inline void udp_mbuf_done(struct mbuf * pkt)
         mbuf_free(pkt);
 }
 
+/** udp_send_one sends a UDP packet without use of sg list
+ * @data: the data to send
+ * @len: length of data to send
+ * @id: the 4-tuple used for the transmission
+ * @cookie: metadata
+ */
+static inline int udp_send_one(void * data, size_t len, struct ip_tuple * id,
+                               uint64_t cookie)
+{
+	int ret = 0;
+	struct mbuf *pkt;
+
+	if (unlikely(len > UDP_MAX_LEN))
+		return -RET_INVAL;
+
+	pkt = mbuf_alloc_local();
+	if (unlikely(!pkt))
+		return -RET_NOBUFS;
+
+	struct eth_hdr *ethhdr = mbuf_mtod(pkt, struct eth_hdr *);
+	struct ip_hdr *iphdr = mbuf_nextd(ethhdr, struct ip_hdr *);
+	struct udp_hdr *udphdr = mbuf_nextd(iphdr, struct udp_hdr *);
+	unsigned char *payload = mbuf_nextd(udphdr, unsigned char *);
+	size_t full_len = len + sizeof(struct udp_hdr);
+	struct ip_addr dst_addr;
+
+	dst_addr.addr = id->dst_ip;
+	if (arp_lookup_mac(&dst_addr, &ethhdr->dhost)) {
+		ret = -RET_AGAIN;
+		goto out;
+        }
+
+	ethhdr->shost = CFG.mac;
+	ethhdr->type = hton16(ETHTYPE_IP);
+
+	ip_setup_header(iphdr, IPPROTO_UDP,
+                        CFG.host_addr.addr, id->dst_ip, full_len);
+	iphdr->chksum = chksum_internet((void *) iphdr, sizeof(struct ip_hdr));
+
+	memcpy(payload, data, len);
+
+	udphdr->src_port = hton16(id->src_port);
+	udphdr->dst_port = hton16(id->dst_port);
+	udphdr->len = hton16(full_len);
+	udphdr->chksum = 0;
+
+	pkt->ol_flags = 0;
+	pkt->nr_iov = 0;
+	pkt->len = UDP_PKT_SIZE + len;
+
+	if (eth_dev_count > 1)
+		panic("udp_send not implemented for bonded interfaces\n");
+	else
+		ret = eth_send(percpu_get(eth_txqs)[0], pkt);
+
+	if (ret)
+        	goto out;
+
+	return 0;
+
+out:
+	mbuf_free(pkt);
+	return ret;
+}
+
 /**
  * udp_send sends a UDP packet
  * @data: the data to send
