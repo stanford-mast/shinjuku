@@ -131,15 +131,10 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
         } while ( i / 0.233 < req->runNs);
 
         asm volatile ("cli":::);
-        struct response * resp = mempool_alloc(&percpu_get(response_pool));
-        if (!resp) {
-                log_warn("Cannot allocate response buffer\n");
-                finished = true;
-                swapcontext_very_fast(cont, &uctx_main);
-        }
+        struct response resp;
+	resp.genNs = req->genNs;
+	resp.runNs = req->runNs;
 
-        resp->genNs = req->genNs;
-        resp->runNs = req->runNs;
         struct ip_tuple new_id = {
                 .src_ip = id->dst_ip,
                 .dst_ip = id->src_ip,
@@ -147,8 +142,7 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
                 .dst_port = id->src_port
         };
 
-        ret = udp_send_one((void *)resp, sizeof(struct response), &new_id,
-                           (uint64_t) resp);
+        ret = udp_send_one((void *)&resp, sizeof(struct response), &new_id);
         if (ret)
                 log_warn("udp_send failed with error %d\n", ret);
 

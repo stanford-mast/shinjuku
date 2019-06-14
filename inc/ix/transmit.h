@@ -85,8 +85,7 @@ static inline void udp_mbuf_done(struct mbuf * pkt)
  * @id: the 4-tuple used for the transmission
  * @cookie: metadata
  */
-static inline int udp_send_one(void * data, size_t len, struct ip_tuple * id,
-                               uint64_t cookie)
+static inline int udp_send_one(void * data, size_t len, struct ip_tuple * id)
 {
 	int ret = 0;
 	struct mbuf *pkt;
