@@ -22,12 +22,15 @@ CXX = g++
 CXXFLAGS = -O3 -g -fPIC -pthread -std=c++0x
 COMMON_INCLUDES = dist.h helpers.h msgs.h
 
-default: latency_client
+default: latency_client batch_client
 
 client.o: client.cpp client.h $(COMMON_INCLUDES)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 latency_client: latency_client.cpp client.o $(COMMON_INCLUDES)
+	$(CXX) $(CXXFLAGS) $^ -o $@
+
+batch_client: batch_client.cpp client.o $(COMMON_INCLUDES)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
 clean:

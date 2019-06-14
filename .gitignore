@@ -11,3 +11,4 @@
 /shinjuku.conf
 /dp/shinjuku
 /client/latency_client
+/client/batch_client
