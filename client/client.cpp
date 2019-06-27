@@ -271,7 +271,7 @@ PortTrimodalBatchClient::PortTrimodalBatchClient(std::string serverip, int serve
 	lambda = qps * 1e-9;
 	work1_ = work1;
 	work2_ = work2;
-	work2_ = work3;
+	work3_ = work3;
 
 	work_dist = new TrimodalDist(seed, work1, work2, work3, ratio1, ratio2);
 	dist = nullptr; // Will get initialized in startReq()
