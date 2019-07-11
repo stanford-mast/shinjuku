@@ -52,42 +52,44 @@ static void preempt_check_init(int num_workers)
 
 static inline void handle_finished(int i)
 {
-        if (worker_responses[i].mbuf == NULL)
+        if (worker_responses[i].req == NULL)
                 log_warn("No mbuf was returned from worker\n");
         context_free(worker_responses[i].rnbl);
-        mbuf_enqueue(&mqueue, (struct mbuf *) worker_responses[i].mbuf);
+        request_enqueue(&frqueue, (struct request *) worker_responses[i].req);
         preempt_check[i] = false;
         worker_responses[i].flag = PROCESSED;
 }
 
 static inline void handle_preempted(int i)
 {
-        void * rnbl, * mbuf;
+        void * rnbl;
+	struct request * req;
         uint8_t type, category;
         uint64_t timestamp;
 
         rnbl = worker_responses[i].rnbl;
-        mbuf = worker_responses[i].mbuf;
+        req = worker_responses[i].req;
         category = worker_responses[i].category;
         type = worker_responses[i].type;
         timestamp = worker_responses[i].timestamp;
-        tskq_enqueue_tail(&tskq[type], rnbl, mbuf, type, category, timestamp);
+        tskq_enqueue_tail(&tskq[type], rnbl, req, type, category, timestamp);
         preempt_check[i] = false;
         worker_responses[i].flag = PROCESSED;
 }
 
 static inline void dispatch_request(int i, uint64_t cur_time)
 {
-        void * rnbl, * mbuf;
+        void * rnbl;
+	struct request * req;
         uint8_t type, category;
         uint64_t timestamp;
 
-        if(smart_tskq_dequeue(tskq, &rnbl, &mbuf, &type,
+        if(smart_tskq_dequeue(tskq, &rnbl, &req, &type,
                               &category, &timestamp, cur_time))
                 return;
         worker_responses[i].flag = RUNNING;
         dispatcher_requests[i].rnbl = rnbl;
-        dispatcher_requests[i].mbuf = mbuf;
+        dispatcher_requests[i].req = req;
         dispatcher_requests[i].type = type;
         dispatcher_requests[i].category = category;
         dispatcher_requests[i].timestamp = timestamp;
@@ -129,20 +131,20 @@ static inline void handle_networker(uint64_t cur_time)
                         ret = context_alloc(&cont);
                         if (unlikely(ret)) {
                                 log_warn("Cannot allocate context\n");
-                                mbuf_enqueue(&mqueue, (struct mbuf *) networker_pointers.pkts[i]);
+                                request_enqueue(&frqueue, networker_pointers.reqs[i]);
                                 continue;
                         }
                         type = networker_pointers.types[i];
                         tskq_enqueue_tail(&tskq[type], cont,
-                                          (void *)networker_pointers.pkts[i],
+                                          networker_pointers.reqs[i],
                                           type, PACKET, cur_time);
                 }
 
                 for (i = 0; i < ETH_RX_MAX_BATCH; i++) {
-                        struct mbuf * buf = mbuf_dequeue(&mqueue);
-                        if (!buf)
+                        struct request * req = request_dequeue(&frqueue);
+                        if (!req)
                                 break;
-                        networker_pointers.pkts[i] = buf;
+                        networker_pointers.reqs[i] = req;
                         networker_pointers.free_cnt++;
                 }
                 networker_pointers.cnt = 0;

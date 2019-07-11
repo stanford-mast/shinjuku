@@ -47,7 +47,7 @@
  */
 void do_networking(void)
 {
-        int i, num_recv;
+        int i, j, num_recv;
         while(1) {
                 eth_process_poll();
                 num_recv = eth_process_recv();
@@ -55,11 +55,25 @@ void do_networking(void)
                         continue;
                 while (networker_pointers.cnt != 0);
                 for (i = 0; i < networker_pointers.free_cnt; i++) {
-                        mbuf_free(networker_pointers.pkts[i]);
+			struct request * req = networker_pointers.reqs[i];
+			for (j = 0; j < req->pkts_length; j++) {
+				mbuf_free(req->mbufs[j]);
+			}
+			mempool_free(&request_mempool, req);
                 }
                 networker_pointers.free_cnt = 0;
                 for (i = 0; i < num_recv; i++) {
-                        networker_pointers.pkts[i] = recv_mbufs[i];
+			struct request * req = mempool_alloc(&request_mempool);
+			if (unlikely(!req)) {
+				log_warn("Cannot allocate request\n");
+				continue;
+			}
+			/* TODO Change this */
+			req->mbufs[0] = recv_mbufs[i];
+			req->pkts_length = 1;
+			req->type = (uint8_t) recv_type[i];
+			/* ------ */
+                        networker_pointers.reqs[i] = req;
                         networker_pointers.types[i] = (uint8_t) recv_type[i];
                 }
                 networker_pointers.cnt = num_recv;

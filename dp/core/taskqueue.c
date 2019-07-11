@@ -38,10 +38,10 @@ static int task_init_mempool(void)
 	return mempool_create(m, &task_datastore, MEMPOOL_SANITY_GLOBAL, 0);
 }
 
-static int mcell_init_mempool(void)
+static int fini_request_cell_init_mempool(void)
 {
-	struct mempool *m = &mcell_mempool;
-	return mempool_create(m, &mcell_datastore, MEMPOOL_SANITY_GLOBAL, 0);
+	struct mempool *m = &fini_request_cell_mempool;
+	return mempool_create(m, &fini_request_cell_datastore, MEMPOOL_SANITY_GLOBAL, 0);
 }
 
 /**
@@ -53,7 +53,7 @@ int taskqueue_init(void)
 {
 	int ret;
 	struct mempool_datastore *t = &task_datastore;
-	struct mempool_datastore *m = &mcell_datastore;
+	struct mempool_datastore *m = &fini_request_cell_datastore;
 
 	ret = mempool_create_datastore(t, TASK_CAPACITY, sizeof(struct task),
                                        1, MEMPOOL_DEFAULT_CHUNKSIZE, "task");
@@ -66,13 +66,13 @@ int taskqueue_init(void)
                 return ret;
         }
 
-	ret = mempool_create_datastore(m, MCELL_CAPACITY, sizeof(struct mbuf_cell),
-                                       1, MEMPOOL_DEFAULT_CHUNKSIZE, "mcell");
+	ret = mempool_create_datastore(m, MCELL_CAPACITY, sizeof(struct fini_request_cell),
+                                       1, MEMPOOL_DEFAULT_CHUNKSIZE, "frcell");
 	if (ret) {
 		return ret;
 	}
 
-        ret = mcell_init_mempool();
+        ret = fini_request_cell_init_mempool();
         if (ret) {
                 return ret;
         }

@@ -46,8 +46,8 @@
 
 struct mempool_datastore task_datastore;
 struct mempool task_mempool __attribute((aligned(64)));
-struct mempool_datastore mcell_datastore;
-struct mempool mcell_mempool __attribute((aligned(64)));
+struct mempool_datastore fini_request_cell_datastore;
+struct mempool fini_request_cell_mempool __attribute((aligned(64)));
 struct mempool_datastore request_datastore;
 struct mempool request_mempool __attribute((aligned(64)));
 struct mempool_datastore rq_datastore;
@@ -78,7 +78,7 @@ struct worker_response
 {
         uint64_t flag;
         void * rnbl;
-        void * mbuf;
+        struct request * req;
         uint64_t timestamp;
         uint8_t type;
         uint8_t category;
@@ -89,7 +89,7 @@ struct dispatcher_request
 {
         uint64_t flag;
         void * rnbl;
-        void * mbuf;
+        struct request * req;
         uint8_t type;
         uint8_t category;
         uint64_t timestamp;
@@ -101,50 +101,50 @@ struct networker_pointers_t
         uint8_t cnt;
         uint8_t free_cnt;
         uint8_t types[ETH_RX_MAX_BATCH];
-        struct mbuf * pkts[ETH_RX_MAX_BATCH];
+        struct request * reqs[ETH_RX_MAX_BATCH];
         char make_it_64_bytes[64 - ETH_RX_MAX_BATCH*9 - 2];
 } __attribute__((packed, aligned(64)));
 
-struct mbuf_cell {
-        struct mbuf * buffer;
-        struct mbuf_cell * next;
+struct fini_request_cell {
+        struct request * req;
+        struct fini_request_cell * next;
 };
 
-struct mbuf_queue {
-        struct mbuf_cell * head;
+struct fini_request_queue {
+        struct fini_request_cell * head;
 };
 
-struct mbuf_queue mqueue;
+struct fini_request_queue frqueue;
 
-static inline struct mbuf * mbuf_dequeue(struct mbuf_queue * mq)
+static inline struct request * request_dequeue(struct fini_request_queue * frq)
 {
-        struct mbuf_cell * tmp;
-        struct mbuf * buf;
+        struct fini_request_cell * tmp;
+        struct request * req;
 
-        if (!mq->head)
+        if (!frq->head)
                 return NULL;
 
-        buf = mq->head->buffer;
-        tmp = mq->head;
-        mempool_free(&mcell_mempool, tmp);
-        mq->head = mq->head->next;
+        req = frq->head->req;
+        tmp = frq->head;
+        mempool_free(&fini_request_cell_mempool, tmp);
+        frq->head = frq->head->next;
 
-        return buf;
+        return req;
 }
 
-static inline void mbuf_enqueue(struct mbuf_queue * mq, struct mbuf * buf)
+static inline void request_enqueue(struct fini_request_queue * frq, struct request * req)
 {
-        if (unlikely(!buf))
+        if (unlikely(!req))
                 return;
-        struct mbuf_cell * mcell = mempool_alloc(&mcell_mempool);
-        mcell->buffer = buf;
-        mcell->next = mq->head;
-        mq->head = mcell;
+        struct fini_request_cell * frcell = mempool_alloc(&fini_request_cell_mempool);
+        frcell->req = req;
+        frcell->next = frq->head;
+        frq->head = frcell;
 }
 
 struct task {
         void * runnable;
-        void * mbuf;
+        struct request * req;
         uint8_t type;
         uint8_t category;
         uint64_t timestamp;
@@ -160,12 +160,12 @@ struct task_queue
 struct task_queue tskq[CFG_MAX_PORTS];
 
 static inline void tskq_enqueue_head(struct task_queue * tq, void * rnbl,
-                                     void * mbuf, uint8_t type,
+                                     struct request * req, uint8_t type,
                                      uint8_t category, uint64_t timestamp)
 {
         struct task * tsk = mempool_alloc(&task_mempool);
         tsk->runnable = rnbl;
-        tsk->mbuf = mbuf;
+        tsk->req = req;
         tsk->type = type;
         tsk->category = category;
         tsk->timestamp = timestamp;
@@ -181,14 +181,14 @@ static inline void tskq_enqueue_head(struct task_queue * tq, void * rnbl,
 }
 
 static inline void tskq_enqueue_tail(struct task_queue * tq, void * rnbl,
-                                     void * mbuf, uint8_t type,
+                                     struct request * req, uint8_t type,
                                      uint8_t category, uint64_t timestamp)
 {
         struct task * tsk = mempool_alloc(&task_mempool);
         if (!tsk)
                 return;
         tsk->runnable = rnbl;
-        tsk->mbuf = mbuf;
+        tsk->req = req;
         tsk->type = type;
         tsk->category = category;
         tsk->timestamp = timestamp;
@@ -204,13 +204,13 @@ static inline void tskq_enqueue_tail(struct task_queue * tq, void * rnbl,
 }
 
 static inline int tskq_dequeue(struct task_queue * tq, void ** rnbl_ptr,
-                                void ** mbuf, uint8_t *type, uint8_t *category,
+                                struct request ** req, uint8_t *type, uint8_t *category,
                                 uint64_t *timestamp)
 {
         if (tq->head == NULL)
             return -1;
         (*rnbl_ptr) = tq->head->runnable;
-        (*mbuf) = tq->head->mbuf;
+        (*req) = tq->head->req;
         (*type) = tq->head->type;
         (*category) = tq->head->category;
         (*timestamp) = tq->head->timestamp;
@@ -231,12 +231,12 @@ static inline uint64_t get_queue_timestamp(struct task_queue * tq, uint64_t * ti
 }
 
 static inline int naive_tskq_dequeue(struct task_queue * tq, void ** rnbl_ptr,
-                                     void ** mbuf, uint8_t *type,
+                                     struct request ** req, uint8_t *type,
                                      uint8_t *category, uint64_t *timestamp)
 {
         int i;
         for (i = 0; i < CFG.num_ports; i++) {
-                if(tskq_dequeue(&tq[i], rnbl_ptr, mbuf, type, category,
+                if(tskq_dequeue(&tq[i], rnbl_ptr, req, type, category,
                                 timestamp) == 0)
                         return 0;
         }
@@ -244,7 +244,7 @@ static inline int naive_tskq_dequeue(struct task_queue * tq, void ** rnbl_ptr,
 }
 
 static inline int smart_tskq_dequeue(struct task_queue * tq, void ** rnbl_ptr,
-                                     void ** mbuf, uint8_t *type,
+                                     struct request ** req, uint8_t *type,
                                      uint8_t *category, uint64_t *timestamp,
                                      uint64_t cur_time)
 {
@@ -267,7 +267,7 @@ static inline int smart_tskq_dequeue(struct task_queue * tq, void ** rnbl_ptr,
         }
 
         if (index != -1) {
-                return tskq_dequeue(&tq[index], rnbl_ptr, mbuf, type, category,
+                return tskq_dequeue(&tq[index], rnbl_ptr, req, type, category,
                                     timestamp);
         }
         return -1;
