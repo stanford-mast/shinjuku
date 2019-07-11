@@ -71,16 +71,6 @@ extern int swapcontext_very_fast(ucontext_t *ouctx, ucontext_t *uctx);
 extern void dune_apic_eoi();
 extern int dune_register_intr_handler(int vector, dune_intr_cb cb);
 
-struct message {
-	uint16_t type;
-	uint16_t seq_num;
-	uint16_t client_id;
-	uint32_t req_id;
-	uint32_t pkts_length;
-	uint64_t runNs;
-	uint64_t genNs;
-} __attribute__((__packed__));
-
 /**
  * response_init - allocates global response datastore
  */
