@@ -48,6 +48,31 @@ struct mempool_datastore task_datastore;
 struct mempool task_mempool __attribute((aligned(64)));
 struct mempool_datastore mcell_datastore;
 struct mempool mcell_mempool __attribute((aligned(64)));
+struct mempool_datastore request_datastore;
+struct mempool request_mempool __attribute((aligned(64)));
+struct mempool_datastore rq_datastore;
+struct mempool rq_mempool __attribute((aligned(64)));
+
+struct request
+{
+	uint32_t pkts_length;
+	uint16_t type;
+	void * mbufs[8];
+} __attribute__((packed, aligned(64)));
+
+struct request_cell
+{
+	uint8_t pkts_remaining;
+	uint16_t client_id;
+	uint32_t req_id;
+	struct request * req;
+	struct request_cell * next;
+	struct request_cell * prev;
+} __attribute__((packed, aligned(64)));
+
+struct request_queue {
+        struct request_cell * head;
+};
 
 struct worker_response
 {

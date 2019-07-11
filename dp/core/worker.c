@@ -69,15 +69,15 @@ extern int swapcontext_very_fast(ucontext_t *ouctx, ucontext_t *uctx);
 extern void dune_apic_eoi();
 extern int dune_register_intr_handler(int vector, dune_intr_cb cb);
 
-struct response {
-        uint64_t runNs;
-        uint64_t genNs;
-};
-
-struct request {
-        uint64_t runNs;
-        uint64_t genNs;
-};
+struct message {
+	uint16_t type;
+	uint16_t seq_num;
+	uint16_t client_id;
+	uint32_t req_id;
+	uint32_t pkts_length;
+	uint64_t runNs;
+	uint64_t genNs;
+} __attribute__((__packed__));
 
 /**
  * response_init - allocates global response datastore
@@ -85,7 +85,7 @@ struct request {
 int response_init(void)
 {
         return mempool_create_datastore(&response_datastore, 128000,
-                                        sizeof(struct response), 1,
+                                        sizeof(struct message), 1,
                                         MEMPOOL_DEFAULT_CHUNKSIZE,
                                         "response");
 }
@@ -122,7 +122,7 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
         void * data = (void *)((uint64_t) msw << 32 | lsw);
         int ret;
 
-        struct request * req = (struct request *) data;
+        struct message * req = (struct message *) data;
 
         uint64_t i = 0;
         do {
@@ -131,7 +131,7 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
         } while ( i / 0.233 < req->runNs);
 
         asm volatile ("cli":::);
-        struct response resp;
+        struct message resp;
 	resp.genNs = req->genNs;
 	resp.runNs = req->runNs;
 
@@ -142,7 +142,7 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
                 .dst_port = id->src_port
         };
 
-        ret = udp_send_one((void *)&resp, sizeof(struct response), &new_id);
+        ret = udp_send_one((void *)&resp, sizeof(struct message), &new_id);
         if (ret)
                 log_warn("udp_send failed with error %d\n", ret);
 

@@ -85,6 +85,7 @@ extern int mempool_init(void);
 extern int init_migration_cpu(void);
 extern int dpdk_init(void);
 extern int taskqueue_init(void);
+extern int request_init(void);
 extern int response_init(void);
 extern int response_init_cpu(void);
 extern int context_init(void);
@@ -113,6 +114,7 @@ static struct init_vector_t init_tbl[] = {
 	{ "firstcpu", init_firstcpu, NULL, NULL},             // after cfg
 	{ "mbuf",    mbuf_init,    mbuf_init_cpu, NULL},      // after firstcpu
 	{ "taskqueue", taskqueue_init, NULL, NULL},      // after firstcpu
+	{ "request", request_init, NULL, NULL},      // after firstcpu
 	{ "response", response_init, response_init_cpu, NULL},
 	{ "context", context_init, NULL},
         { "ethdev", init_ethdev, NULL, NULL},
