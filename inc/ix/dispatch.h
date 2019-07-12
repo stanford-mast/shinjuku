@@ -331,21 +331,22 @@ static inline struct request * rq_update(struct request_queue * rq, struct mbuf 
                 if (cur->client_id == client_id && cur->req_id == req_id) {
                         cur->req->mbufs[seq_num] = pkt;
                         cur->pkts_remaining--;
-                }
-                if (cur->pkts_remaining == 0) {
-			struct request * req = cur->req;
-                        if (cur->prev == NULL) {
-                                rq->head = cur->next;
-				if (rq->head != NULL)
-					rq->head->prev = NULL;
-                        } else {
-                                cur->prev->next = cur->next;
-                                if (cur->next != NULL)
-                                        cur->next->prev = cur->prev;
-                        }
-                        mempool_free(&rq_mempool, cur);
-                        return req;
-                }
+			if (cur->pkts_remaining == 0) {
+				struct request * req = cur->req;
+				if (cur->prev == NULL) {
+					rq->head = cur->next;
+					if (rq->head != NULL)
+						rq->head->prev = NULL;
+				} else {
+					cur->prev->next = cur->next;
+					if (cur->next != NULL)
+						cur->next->prev = cur->prev;
+				}
+				mempool_free(&rq_mempool, cur);
+				return req;
+			}
+			return NULL;
+		}
 		cur = cur->next;
         }
 
@@ -359,7 +360,8 @@ static inline struct request * rq_update(struct request_queue * rq, struct mbuf 
                 rc->req->pkts_length = pkts_length;
                 rc->req->type = type;
                 rc->next = rq->head;
-                rc->next->prev = rc;
+		rc->next->prev = rc;
+		rc->prev = NULL;
                 rq->head = rc;
                 return NULL;
         }
