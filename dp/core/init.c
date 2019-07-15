@@ -96,6 +96,9 @@ extern void do_dispatching(int num_cpus);
 extern struct mempool context_pool;
 extern struct mempool stack_pool;
 
+// Flag that controls whether interrupts are disabled during memory allocation.
+uint8_t flag;
+
 struct init_vector_t {
 	const char *name;
 	int (*f)(void);

@@ -8,6 +8,7 @@
 /deps/dpdk
 /deps/dune
 /deps/pcidma
+/deps/rocksdb
 /shinjuku.conf
 /dp/shinjuku
 /client/latency_client

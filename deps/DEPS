@@ -14,3 +14,8 @@ https://github.com/ix-project/pcidma.git pcidma 3a411ad4810a1c8ee7954ad35229dfa9
 # comments so that git can
 # automatically merge this file.
 https://github.com/kkaffes/dune.git dune master
+
+# Three lines of non-changing
+# comments so that git can
+# automatically merge this file.
+https://github.com/facebook/rocksdb rocksdb v5.15.10
