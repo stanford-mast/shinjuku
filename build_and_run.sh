@@ -1,9 +1,8 @@
 #!/bin/sh
 
-# Build RocksDB static library
-cd deps/rocksdb
-make -sj64 static_lib
-cd ../../
+# Create clean copy of DB.
+rm -r /tmp/my_db
+cp -r db/my_db /tmp/my_db
 
 # Build and run Shinjuku.
 make clean

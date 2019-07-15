@@ -15,7 +15,16 @@ make -sj64 -C deps/dune
 make -sj64 -C deps/pcidma
 make -sj64 -C deps/dpdk config T=x86_64-native-linuxapp-gcc
 make -sj64 -C deps/dpdk
+make -sj64 -C deps/rocksdb static_lib
+make -sj64 -C deps/opnew
 
 # Insert kernel modules
 sudo insmod deps/dune/kern/dune.ko
 sudo insmod deps/pcidma/pcidma.ko
+
+# Create RocksDB database
+make -C db
+cd db
+rm -r my_db
+./create_db
+cd ../

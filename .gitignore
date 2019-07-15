@@ -11,4 +11,6 @@
 /deps/rocksdb
 /shinjuku.conf
 /dp/shinjuku
+/db/create_db
+/db/my_db
 /client/latency_client
