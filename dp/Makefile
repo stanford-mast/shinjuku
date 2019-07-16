@@ -29,6 +29,7 @@ PCIDMA	= ../deps/pcidma
 DPDK_INC = -I$(DPDK)/build/include -I$(DPDK)/lib/librte_eal/common -I$(DPDK)/drivers/net/ixgbe -I$(DPDK)/drivers/net/i40e
 INC	= -I../inc -I$(DUNE)/libdune -I../inc/lwip -I../inc/lwip/ipv4 -I../inc/lwip/ipv6 $(DPDK_INC) -include$(DUNE)/kern/dune.h
 INC	+= -I$(PCIDMA)
+INC	+= -I../deps/rocksdb/include/rocksdb
 CC	= gcc
 CFLAGS	= -g -Wall -fno-pie -fno-dwarf2-cfi-asm -fno-asynchronous-unwind-tables -O3 -mno-red-zone $(INC) -D__KERNEL__ $(EXTRA_CFLAGS)
 LD	= g++

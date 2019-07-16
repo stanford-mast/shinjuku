@@ -39,6 +39,8 @@
 #include <sys/types.h>
 #include <sys/resource.h>
 
+#include <ix/rocksdb.h>
+#include <ix/hijack.h>
 #include <ix/cpu.h>
 #include <ix/log.h>
 #include <ix/mbuf.h>
@@ -47,6 +49,7 @@
 #include <ix/dispatch.h>
 #include <ix/transmit.h>
 
+#include <c.h>
 #include <dune.h>
 
 #include <net/ip.h>
@@ -61,6 +64,8 @@ __thread ucontext_t uctx_main;
 __thread ucontext_t * cont;
 __thread int cpu_nr_;
 __thread volatile uint8_t finished;
+
+extern uint8_t flag;
 
 DEFINE_PERCPU(struct mempool, response_pool __attribute__((aligned(64))));
 
@@ -116,11 +121,23 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
 
         struct message * req = (struct message *) data;
 
+	rocksdb_readoptions_t * readoptions = rocksdb_readoptions_create();
+	rocksdb_iterator_t * iter = rocksdb_create_iterator(db, readoptions);
+	for (rocksdb_iter_seek_to_first(iter); rocksdb_iter_valid(iter); rocksdb_iter_next(iter)) {
+		char * retr_key;
+		size_t klen;
+		retr_key = rocksdb_iter_key(iter, &klen);
+		if (req->runNs > 0)
+			break;
+	}
+	rocksdb_iter_destroy(iter);
+	rocksdb_readoptions_destroy(readoptions);
+	/*
         uint64_t i = 0;
         do {
                 asm volatile ("nop");
                 i++;
-        } while ( i / 0.233 < req->runNs);
+        } while ( i / 0.233 < req->runNs);*/
 
         asm volatile ("cli":::);
         struct message resp;

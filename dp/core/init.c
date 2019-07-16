@@ -47,6 +47,7 @@
 #include <ix/drivers.h>
 #include <ix/context.h>
 #include <ix/dispatch.h>
+#include <ix/rocksdb.h>
 
 #include <asm/cpu.h>
 
@@ -61,6 +62,8 @@
 #include <sys/resource.h>
 #include <ucontext.h>
 #include <time.h>
+
+#include <c.h>
 
 #define MSR_RAPL_POWER_UNIT 1542
 #define ENERGY_UNIT_MASK 0x1F00
@@ -431,6 +434,27 @@ int main(int argc, char *argv[])
                 }
         }
         log_info("init done\n");
+
+	// Initialize RocksDB
+	rocksdb_options_t *options = rocksdb_options_create();
+	rocksdb_options_set_allow_mmap_reads(options, 1);
+	rocksdb_options_set_allow_mmap_writes(options, 1);
+	rocksdb_slicetransform_t * prefix_extractor = rocksdb_slicetransform_create_fixed_prefix(8);
+	rocksdb_options_set_prefix_extractor(options, prefix_extractor);
+	rocksdb_options_set_plain_table_factory(options, 0, 10, 0.75, 3);
+        // Optimize RocksDB. This is the easiest way to
+        // get RocksDB to perform well
+	rocksdb_options_increase_parallelism(options, 0);
+	rocksdb_options_optimize_level_style_compaction(options, 0);
+	// create the DB if it's not already present
+	rocksdb_options_set_create_if_missing(options, 1);
+
+	// open DB
+	char *err = NULL;
+	char DBPath[] = "/tmp/my_db";
+	db = rocksdb_open(options, DBPath, &err);
+	assert(!err);
+	flag = 1;
 
         do_dispatching(CFG.num_cpus);
 	log_info("finished handling contexts, looping forever...\n");
