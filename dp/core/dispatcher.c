@@ -34,7 +34,6 @@
 extern void dune_apic_send_posted_ipi(uint8_t vector, uint32_t dest_core);
 
 #define PREEMPT_VECTOR 0xf2
-#define PREEMPTION_DELAY MAX_UINT64
 
 static void timestamp_init(int num_workers)
 {
@@ -72,7 +71,11 @@ static inline void handle_preempted(int i)
         category = worker_responses[i].category;
         type = worker_responses[i].type;
         timestamp = worker_responses[i].timestamp;
-        tskq_enqueue_tail(&tskq[type], rnbl, req, type, category, timestamp);
+	if (CFG.queue_settings[type]) {
+		tskq_enqueue_head(&tskq[type], rnbl, req, type, category, timestamp);
+	} else {
+		tskq_enqueue_tail(&tskq[type], rnbl, req, type, category, timestamp);
+	}
         preempt_check[i] = false;
         worker_responses[i].flag = PROCESSED;
 }
@@ -100,7 +103,7 @@ static inline void dispatch_request(int i, uint64_t cur_time)
 
 static inline void preempt_worker(int i, uint64_t cur_time)
 {
-        if (preempt_check[i] && (((cur_time - timestamps[i]) / 2.5) > PREEMPTION_DELAY)) {
+        if (preempt_check[i] && (((cur_time - timestamps[i]) / 2.5) > CFG.preemption_delay)) {
                 // Avoid preempting more times.
                 preempt_check[i] = false;
                 dune_apic_send_posted_ipi(PREEMPT_VECTOR, CFG.cpu[i + 2]);

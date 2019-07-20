@@ -60,6 +60,11 @@ struct cfg_parameters {
 	int num_slos;
 	float slos[CFG_MAX_PORTS];
 
+	int num_queue_settings;
+	bool queue_settings[CFG_MAX_PORTS];
+
+	uint64_t preemption_delay;
+
 	char loader_path[256];
 };
 

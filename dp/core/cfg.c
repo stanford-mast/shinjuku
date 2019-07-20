@@ -61,6 +61,8 @@ static char config_file[256];
 static int parse_host_addr(void);
 static int parse_port(void);
 static int parse_slo(void);
+static int parse_queue_settings(void);
+static int parse_preemption_delay(void);
 static int parse_gateway_addr(void);
 static int parse_arp(void);
 static int parse_devices(void);
@@ -76,6 +78,8 @@ static struct config_vector_t config_tbl[] = {
 	{ "host_addr",    parse_host_addr},
 	{ "port",         parse_port},
 	{ "slo",          parse_slo},
+	{ "queue_settings", parse_queue_settings},
+	{ "preemption_delay", parse_preemption_delay},
 	{ "gateway_addr", parse_gateway_addr},
 	{ "arp",          parse_arp},
 	{ "devices",      parse_devices},
@@ -165,6 +169,20 @@ static int parse_gateway_addr(void)
 	return 0;
 }
 
+static int parse_preemption_delay(void)
+{
+	const config_setting_t *preemption = NULL;
+	int64_t delay;
+
+	preemption = config_lookup(&cfg, "preemption_delay");
+	if (!preemption)
+		return -EINVAL;
+
+	delay = config_setting_get_int64(preemption);
+	CFG.preemption_delay = (uint64_t) delay;
+	return 0;
+}
+
 static int add_port(int port)
 {
 	if (port <= 0 || port > 65534)
@@ -221,6 +239,30 @@ static int parse_slo(void)
 		ret = add_slo(slo);
 		if (ret)
 			return ret;
+	}
+	return 0;
+}
+
+static int add_queue_setting(bool enqueue_front)
+{
+	CFG.queue_settings[CFG.num_queue_settings] = enqueue_front;
+	++CFG.num_queue_settings;
+	return 0;
+}
+
+static int parse_queue_settings(void)
+{
+	const config_setting_t *queue_settings = NULL;
+
+	queue_settings = config_lookup(&cfg, "queue_setting");
+	if (!queue_settings)
+		return -EINVAL;
+
+	CFG.num_queue_settings = 0;
+	while (CFG.num_queue_settings < CFG_MAX_PORTS && CFG.num_queue_settings < config_setting_length(queue_settings)) {
+		bool enqueue_front = false;
+		enqueue_front = config_setting_get_bool_elem(queue_settings, CFG.num_queue_settings);
+		add_queue_setting(enqueue_front);
 	}
 	return 0;
 }

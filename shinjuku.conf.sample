@@ -25,6 +25,13 @@ port=1234
 ## slo : slo(s) in nanoseconds for each request type
 slo=1000
 
+## queue_settings : If true enqueue preempted packets to the head of their
+##                  corresponding queues. If false, enqueue to the back.
+queue_setting = [false]
+
+## preemption_delay: preemption time quantum in ns.
+preemption_delay = 1000000000
+
 ## arp: allows you to add static arp entries in the interface arp table.
 #arp=(
 #  {
