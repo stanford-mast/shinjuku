@@ -120,7 +120,7 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
         do {
                 asm volatile ("nop");
                 i++;
-        } while ( i / 0.233 < req->runNs);
+        } while ( i / 0.58 < req->runNs);
 
         asm volatile ("cli":::);
         struct message resp;
