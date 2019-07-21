@@ -128,6 +128,15 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
 	resp.runNs = req->runNs;
 	resp.type = TYPE_RES;
 
+	int j;
+	for (j = 0; j < 3; j++) {
+		if (dispatcher_requests[cpu_nr_].type == j) {
+			resp.queue_length[j] = queue_length[j] - 1;
+		} else {
+			resp.queue_length[j] = queue_length[j];
+		}
+	}
+
         struct ip_tuple new_id = {
                 .src_ip = id->dst_ip,
                 .dst_ip = id->src_ip,

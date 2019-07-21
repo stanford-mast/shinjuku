@@ -59,6 +59,7 @@ struct mempool rq_mempool __attribute((aligned(64)));
 struct message {
         uint16_t type;
         uint16_t seq_num;
+	uint32_t queue_length[3];
         uint16_t client_id;
         uint32_t req_id;
         uint32_t pkts_length;
@@ -370,6 +371,7 @@ static inline struct request * rq_update(struct request_queue * rq, struct mbuf 
 
 uint64_t timestamps[MAX_WORKERS];
 uint8_t preempt_check[MAX_WORKERS];
+volatile uint32_t queue_length[CFG_MAX_PORTS];
 volatile struct networker_pointers_t networker_pointers;
 volatile struct worker_response worker_responses[MAX_WORKERS];
 volatile struct dispatcher_request dispatcher_requests[MAX_WORKERS];

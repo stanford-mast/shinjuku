@@ -54,6 +54,7 @@ static inline void handle_finished(int i)
         if (worker_responses[i].req == NULL)
                 log_warn("No mbuf was returned from worker\n");
         context_free(worker_responses[i].rnbl);
+	--queue_length[worker_responses[i].type];
         request_enqueue(&frqueue, (struct request *) worker_responses[i].req);
         preempt_check[i] = false;
         worker_responses[i].flag = PROCESSED;
@@ -138,6 +139,7 @@ static inline void handle_networker(uint64_t cur_time)
                                 continue;
                         }
                         type = networker_pointers.types[i];
+			++queue_length[type];
                         tskq_enqueue_tail(&tskq[type], cont,
                                           networker_pointers.reqs[i],
                                           type, PACKET, cur_time);
