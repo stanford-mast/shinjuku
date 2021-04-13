@@ -22,7 +22,7 @@ There is currently no binary distribution of Shinjuku. You will therefore have t
 1. fetch the dependencies:
    ```
    ./deps/fetch-deps.sh
-   sudo apt-get install libconfig-dev libnuma-dev
+   sudo apt-get install libconfig-dev libnuma-dev libgflags-dev libsnappy-dev liblz4-dev
    ```
 
 2. Build the dependencies, set up the environment, and run Shinjuku:
