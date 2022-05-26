@@ -76,7 +76,7 @@ struct networker_pointers_t
         uint8_t cnt;
         uint8_t free_cnt;
         uint8_t types[ETH_RX_MAX_BATCH];
-        struct mbuf * pkts[ETH_RX_MAX_BATCH];
+        void * pkts[ETH_RX_MAX_BATCH];
         char make_it_64_bytes[64 - ETH_RX_MAX_BATCH*9 - 2];
 } __attribute__((packed, aligned(64)));
 

@@ -34,7 +34,7 @@
 extern void dune_apic_send_posted_ipi(uint8_t vector, uint32_t dest_core);
 
 #define PREEMPT_VECTOR 0xf2
-#define PREEMPTION_DELAY 5000
+#define PREEMPTION_DELAY 5000000
 
 static void timestamp_init(int num_workers)
 {
@@ -142,7 +142,7 @@ static inline void handle_networker(uint64_t cur_time)
                         struct mbuf * buf = mbuf_dequeue(&mqueue);
                         if (!buf)
                                 break;
-                        networker_pointers.pkts[i] = buf;
+                        networker_pointers.pkts[i] = (void *) buf;
                         networker_pointers.free_cnt++;
                 }
                 networker_pointers.cnt = 0;

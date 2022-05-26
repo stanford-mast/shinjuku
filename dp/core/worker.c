@@ -118,6 +118,8 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
 {
         asm volatile ("sti":::);
 
+        // TODO: Need to replace this work loop.
+        /*
         struct ip_tuple * id = (struct ip_tuple *) ((uint64_t) msw_id << 32 | lsw_id);
         void * data = (void *)((uint64_t) msw << 32 | lsw);
         int ret;
@@ -129,8 +131,11 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
                 asm volatile ("nop");
                 i++;
         } while ( i / 0.233 < req->runNs);
-
+        */
         asm volatile ("cli":::);
+        // No need to reply for the in-process generator
+        // TODO: Maybe record completion times here.
+        /*
         struct response * resp = mempool_alloc(&percpu_get(response_pool));
         if (!resp) {
                 log_warn("Cannot allocate response buffer\n");
@@ -151,7 +156,7 @@ static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
                        (uint64_t) resp);
         if (ret)
                 log_warn("udp_send failed with error %d\n", ret);
-
+        */
         finished = true;
         swapcontext_very_fast(cont, &uctx_main);
 }
@@ -195,15 +200,20 @@ static inline void init_worker(void)
 static inline void handle_new_packet(void)
 {
         int ret;
-        void * data;
         struct ip_tuple * id;
-        struct mbuf * pkt = (struct mbuf *) dispatcher_requests[cpu_nr_].mbuf;
-        parse_packet(pkt, &data, &id);
+        void * data = (void *) dispatcher_requests[cpu_nr_].mbuf;
         if (data) {
+                /*
                 uint32_t msw = ((uint64_t) data & 0xFFFFFFFF00000000) >> 32;
                 uint32_t lsw = (uint64_t) data & 0x00000000FFFFFFFF;
                 uint32_t msw_id = ((uint64_t) id & 0xFFFFFFFF00000000) >> 32;
                 uint32_t lsw_id = (uint64_t) id & 0x00000000FFFFFFFF;
+                */
+                // TODO: Pass the actual work function parameters here.
+                uint32_t msw = 0;
+                uint32_t lsw = 0;
+                uint32_t msw_id = 0;
+                uint32_t lsw_id = 0;
                 cont = dispatcher_requests[cpu_nr_].rnbl;
                 getcontext_fast(cont);
                 set_context_link(cont, &uctx_main);

@@ -33,7 +33,7 @@ CC	= gcc
 CFLAGS	= -g -Wall -fno-pie -fno-dwarf2-cfi-asm -fno-asynchronous-unwind-tables -O3 -mno-red-zone $(INC) -D__KERNEL__ $(EXTRA_CFLAGS)
 LD	= gcc
 LDFLAGS	= -T ix.ld -no-pie
-LDLIBS	= -lrt -lpthread -lm -lnuma -ldl -lconfig
+LDLIBS	= -lrt -lpthread -lm -lnuma -ldl -lconfig -lgsl -lgslcblas
 
 ifneq ($(DEBUG),)
 CFLAGS += -DDEBUG
