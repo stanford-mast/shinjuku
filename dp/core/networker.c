@@ -36,6 +36,7 @@
 #include <ix/mbuf.h>
 #include <ix/timer.h>
 #include <ix/mempool.h>
+#include <ix/request.h>
 #include <ix/dispatch.h>
 #include <ix/ethqueue.h>
 #include <ix/transmit.h>
@@ -46,54 +47,13 @@
 #include <net/udp.h>
 #include <net/ethernet.h>
 
+extern int request_init(void);
+
 #define NUM_REQUESTS 1000000
 #define TARGET_QPS 1
-#define REQUEST_CAPACITY 1024
-
-#define S_TO_CLOCK(time)  ((time)*cycles_per_us*1000000)
 
 gsl_rng * rnd;
 double lambda = 1.0 / TARGET_QPS;
-
-
-/* Initialize Request mempool */
-
-struct mempool_datastore request_datastore;
-struct mempool request_pool __attribute((aligned(64)));
-
-static int request_init_mempool(void)
-{
-        struct mempool *m = &request_pool;
-        return mempool_create(m, &request_datastore, MEMPOOL_SANITY_GLOBAL, 0);
-}
-
-int request_init(void)
-{
-        int ret;
-        ret = mempool_create_datastore(&request_datastore, REQUEST_CAPACITY, 64, 1,
-                                       MEMPOOL_DEFAULT_CHUNKSIZE, "request");
-        if (ret)
-                return ret;
-
-        ret = request_init_mempool();
-        return ret;
-}
-
-static inline int request_alloc(void ** req)
-{
-    (*req) = mempool_alloc(&request_pool);
-    if (unlikely(!(*req)))
-        return -1;
-
-    return 0;
-}
-
-static inline void request_free(void *req)
-{
-    mempool_free(&request_pool, req);
-}
-/* -------- */
-
 
 /**
  * do_networking - implements networking core's functionality
