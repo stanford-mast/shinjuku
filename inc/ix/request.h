@@ -31,6 +31,7 @@
 #include <ix/mempool.h>
 
 #define REQUEST_CAPACITY 1024
+#define NUM_NOPS_ITER 20
 #define S_TO_CLOCK(time)  ((time)*cycles_per_us*1000000)
 
 typedef struct {

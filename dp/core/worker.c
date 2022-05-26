@@ -36,6 +36,9 @@
 #include <stdio.h>
 #include <time.h>
 
+#include <immintrin.h>
+#include <x86intrin.h>
+
 #include <sys/types.h>
 #include <sys/resource.h>
 
@@ -45,6 +48,7 @@
 #include <asm/cpu.h>
 #include <ix/context.h>
 #include <ix/dispatch.h>
+#include <ix/request.h>
 #include <ix/transmit.h>
 
 #include <dune.h>
@@ -113,50 +117,23 @@ static void test_handler(struct dune_tf *tf)
  * @msw: the top 32-bits of the pointer containing the data
  * @lsw: the bottom 32 bits of the pointer containing the data
  */
-static void generic_work(uint32_t msw, uint32_t lsw, uint32_t msw_id,
-                         uint32_t lsw_id)
+static void generic_work(uint32_t msw, uint32_t lsw)
 {
         asm volatile ("sti":::);
 
         // TODO: Need to replace this work loop.
-        /*
-        struct ip_tuple * id = (struct ip_tuple *) ((uint64_t) msw_id << 32 | lsw_id);
-        void * data = (void *)((uint64_t) msw << 32 | lsw);
-        int ret;
-
-        struct request * req = (struct request *) data;
-
-        uint64_t i = 0;
-        do {
-                asm volatile ("nop");
-                i++;
-        } while ( i / 0.233 < req->runNs);
-        */
-        asm volatile ("cli":::);
-        // No need to reply for the in-process generator
-        // TODO: Maybe record completion times here.
-        /*
-        struct response * resp = mempool_alloc(&percpu_get(response_pool));
-        if (!resp) {
-                log_warn("Cannot allocate response buffer\n");
-                finished = true;
-                swapcontext_very_fast(cont, &uctx_main);
+        uint64_t num_iter = ((uint64_t) msw << 32 | lsw);
+        uint64_t dst;
+        for (uint64_t i = 0; i < num_iter; i++) {
+                for (int j = 0; j < NUM_NOPS_ITER; j++) {
+                        asm volatile ("add $5, %[DEST]" : [DEST] "=r" (dst) : "[DEST]" (dst));
+                        asm volatile ("add $5, %[DEST]" : [DEST] "=r" (dst) : "[DEST]" (dst));
+                        asm volatile ("add $5, %[DEST]" : [DEST] "=r" (dst) : "[DEST]" (dst));
+                        asm volatile ("add $5, %[DEST]" : [DEST] "=r" (dst) : "[DEST]" (dst));
+                }
         }
-
-        resp->genNs = req->genNs;
-        resp->runNs = req->runNs;
-        struct ip_tuple new_id = {
-                .src_ip = id->dst_ip,
-                .dst_ip = id->src_ip,
-                .src_port = id->dst_port,
-                .dst_port = id->src_port
-        };
-
-        ret = udp_send((void *)resp, sizeof(struct response), &new_id,
-                       (uint64_t) resp);
-        if (ret)
-                log_warn("udp_send failed with error %d\n", ret);
-        */
+        asm volatile ("cli":::);
+        // TODO: Maybe record completion times here.
         finished = true;
         swapcontext_very_fast(cont, &uctx_main);
 }
@@ -200,25 +177,14 @@ static inline void init_worker(void)
 static inline void handle_new_packet(void)
 {
         int ret;
-        struct ip_tuple * id;
         void * data = (void *) dispatcher_requests[cpu_nr_].mbuf;
         if (data) {
-                /*
-                uint32_t msw = ((uint64_t) data & 0xFFFFFFFF00000000) >> 32;
-                uint32_t lsw = (uint64_t) data & 0x00000000FFFFFFFF;
-                uint32_t msw_id = ((uint64_t) id & 0xFFFFFFFF00000000) >> 32;
-                uint32_t lsw_id = (uint64_t) id & 0x00000000FFFFFFFF;
-                */
-                // TODO: Pass the actual work function parameters here.
-                uint32_t msw = 0;
-                uint32_t lsw = 0;
-                uint32_t msw_id = 0;
-                uint32_t lsw_id = 0;
+                uint32_t msw = (((request_t *) data)->num_iter & 0xFFFFFFFF00000000) >> 32;
+                uint32_t lsw = ((request_t *) data)->num_iter & 0x00000000FFFFFFFF;
                 cont = dispatcher_requests[cpu_nr_].rnbl;
                 getcontext_fast(cont);
                 set_context_link(cont, &uctx_main);
-                makecontext(cont, (void (*)(void)) generic_work, 4, msw, lsw,
-                            msw_id, lsw_id);
+                makecontext(cont, (void (*)(void)) generic_work, 2, msw, lsw);
                 finished = false;
                 ret = swapcontext_very_fast(&uctx_main, cont);
                 if (ret) {
