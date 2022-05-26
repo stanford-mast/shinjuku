@@ -121,7 +121,6 @@ static void generic_work(uint32_t msw, uint32_t lsw)
 {
         asm volatile ("sti":::);
 
-        // TODO: Need to replace this work loop.
         uint64_t num_iter = ((uint64_t) msw << 32 | lsw);
         uint64_t dst;
         for (uint64_t i = 0; i < num_iter; i++) {
@@ -133,8 +132,10 @@ static void generic_work(uint32_t msw, uint32_t lsw)
                 }
         }
         asm volatile ("cli":::);
-        // TODO: Maybe record completion times here.
         finished = true;
+	// TODO: Maybe record completion latency here instead of printing
+	log_info("Request_latency in cycles: %lu\n",
+                  rdtscp(NULL) - ((request_t *)dispatcher_requests[cpu_nr_].mbuf)->qtime);
         swapcontext_very_fast(cont, &uctx_main);
 }
 
@@ -243,8 +244,6 @@ void do_work(void)
         log_info("do_work: Waiting for dispatcher work\n");
 
         while (true) {
-                eth_process_reclaim();
-                eth_process_send();
                 handle_request();
                 finish_request();
         }

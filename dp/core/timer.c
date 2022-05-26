@@ -40,6 +40,7 @@
 #include <ix/cpu.h>
 #include <ix/kstats.h>
 #include <ix/ethfg.h>
+#include <ix/request.h>
 #include <assert.h>
 #include <time.h>
 #include <ix/log.h>
@@ -88,6 +89,7 @@ static DEFINE_PERCPU(struct timerwheel, timer_wheel_cpu);
 
 
 int cycles_per_us __aligned(64);
+int cycles_per_iter __aligned(64);
 
 /**
  * __timer_delay_us - spins the CPU for the specified delay
@@ -452,6 +454,30 @@ timer_calibrate_tsc(void)
 	return -1;
 }
 
+
+/* Measure the cycles per iteration of the work function */
+static int
+timer_calibrate_work_function(void)
+{
+	cpu_serialize();
+	uint64_t dst, end, start;
+	uint64_t num_iter = 1e6;
+	start = rdtsc();
+        for (uint64_t i = 0; i < num_iter; i++) {
+                for (int j = 0; j < NUM_NOPS_ITER; j++) {
+                        asm volatile ("add $5, %[DEST]" : [DEST] "=r" (dst) : "[DEST]" (dst));
+                        asm volatile ("add $5, %[DEST]" : [DEST] "=r" (dst) : "[DEST]" (dst));
+                        asm volatile ("add $5, %[DEST]" : [DEST] "=r" (dst) : "[DEST]" (dst));
+                        asm volatile ("add $5, %[DEST]" : [DEST] "=r" (dst) : "[DEST]" (dst));
+                }
+        }
+	end = rdtscp(NULL);
+	cycles_per_iter = (uint64_t)((end - start) / num_iter);
+	return 0;
+}
+
+
+
 /**
  * timer_init_fg - initializes the timer service for a core
  */
@@ -480,6 +506,7 @@ int timer_init(void)
 	if (ret)
 		return ret;
 
+	timer_calibrate_work_function();
 	return 0;
 }
 

@@ -100,7 +100,7 @@ void do_networking(void)
                 panic("Could not initialize request mempool\n");
         }
 
-        // TODO: Calibrate number of iterations based on target request time.
+	log_info("Cycles per work function iteration: %d\n", cycles_per_iter);
 
         uint64_t request_delay = S_TO_CLOCK(gsl_ran_exponential(rnd,lambda));
         uint64_t next_request = rdtsc() /* cur_time */ + request_delay;
@@ -108,7 +108,6 @@ void do_networking(void)
                 while (networker_pointers.cnt != 0);
                 for (i = 0; i < networker_pointers.free_cnt; i++) {
                         // Free the finished requests.
-                        log_info("COMPLETED A REQUEST\n");
                         request_free(networker_pointers.pkts[i]);
                 }
                 networker_pointers.free_cnt = 0;
@@ -137,7 +136,6 @@ void do_networking(void)
 
                         // Generate the next request.
                         next_request += S_TO_CLOCK(gsl_ran_exponential(rnd,lambda));
-                        log_info("TIME TO GENERATE A REQUEST: %lu\n", next_request);
                 }
                 networker_pointers.cnt = num_recv;
         }

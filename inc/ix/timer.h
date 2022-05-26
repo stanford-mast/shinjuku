@@ -116,6 +116,7 @@ extern int timer_init_cpu(void);
 extern int timer_init(void);
 
 extern int cycles_per_us;
+extern int cycles_per_iter;
 
 
 
