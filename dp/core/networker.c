@@ -127,7 +127,7 @@ void do_networking(void)
                         }
                         ++num_recv;
                         ((request_t *)req)->req_id = req_id++;
-                        ((request_t *)req)->qtime = cur_time;
+                        ((request_t *)req)->qtime = next_request;
                         ((request_t *)req)->num_iter = latency_distribution();
                         // Send the current request to the dispatcher.
                         networker_pointers.pkts[i] = req;
