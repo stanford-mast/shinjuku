@@ -27,6 +27,7 @@
  * system and forwading them to the dispatcher.
  */
 #include <stdio.h>
+#include <fcntl.h>
 
 #include <gsl/gsl_randist.h>
 
@@ -49,8 +50,7 @@
 
 extern int request_init(void);
 
-#define NUM_REQUESTS 1000000
-#define TARGET_QPS 1
+#define TARGET_QPS 1400000
 
 gsl_rng * rnd;
 double lambda = 1.0 / TARGET_QPS;
@@ -65,7 +65,7 @@ uint64_t d_iratio;
 uint64_t d_long_iter;
 double d_mu = 1;
 double d_sigma = 10;
-uint64_t target_iter = 1;
+uint64_t target_iter = 0;
 
 static inline uint64_t latency_distribution()
 {
@@ -104,7 +104,7 @@ void do_networking(void)
 
         uint64_t request_delay = S_TO_CLOCK(gsl_ran_exponential(rnd,lambda));
         uint64_t next_request = rdtsc() /* cur_time */ + request_delay;
-        while(1) {
+        while (req_id < NUM_REQUESTS) {
                 while (networker_pointers.cnt != 0);
                 for (i = 0; i < networker_pointers.free_cnt; i++) {
                         // Free the finished requests.
@@ -139,4 +139,16 @@ void do_networking(void)
                 }
                 networker_pointers.cnt = num_recv;
         }
+	log_info("Executed all requests\n");
+	// Polling for 10 seconds for requests to finish execution.
+	while (rdtsc() < (next_request + S_TO_CLOCK(10)));
+	int fd = open("output.txt", O_WRONLY);
+	for (int count = 0; count < NUM_REQUESTS; count++) {
+		char buffer[50];
+		int written = sprintf(buffer, "%lu\n", latencies[count]);
+		write(fd, buffer, written);
+	}
+	close(fd);
+	log_info("Finished and printed latencies\n");
+	exit(0);
 }

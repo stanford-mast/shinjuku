@@ -133,9 +133,9 @@ static void generic_work(uint32_t msw, uint32_t lsw)
         }
         asm volatile ("cli":::);
         finished = true;
-	// TODO: Maybe record completion latency here instead of printing
-	log_info("Request_latency in cycles: %lu\n",
-                  rdtscp(NULL) - ((request_t *)dispatcher_requests[cpu_nr_].mbuf)->qtime);
+	// TODO: Maybe record completion latency here instead of after returning
+	//log_info("Request_latency in cycles: %lu\n",
+        //          rdtscp(NULL) - ((request_t *)dispatcher_requests[cpu_nr_].mbuf)->qtime);
         swapcontext_very_fast(cont, &uctx_main);
 }
 
@@ -219,6 +219,11 @@ static inline void handle_request(void)
                 handle_new_packet();
         else
                 handle_context();
+	if (finished) {
+		// Get request id and record latency.
+		request_t * req = (request_t *) dispatcher_requests[cpu_nr_].mbuf;
+		latencies[req->req_id] =  rdtscp(NULL) - req->qtime;
+	}
 }
 
 static inline void finish_request(void)
