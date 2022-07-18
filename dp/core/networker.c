@@ -50,7 +50,7 @@
 
 extern int request_init(void);
 
-#define TARGET_QPS 1400000
+#define TARGET_QPS 5000
 
 gsl_rng * rnd;
 double lambda = 1.0 / TARGET_QPS;
@@ -58,14 +58,14 @@ double lambda = 1.0 / TARGET_QPS;
 /* Work distribution parameters */
 enum {D_CONSTANT, D_LOGNORMAL, D_BIMODAL, D_EXP};
 
-int distribution = D_CONSTANT;
+int distribution = D_BIMODAL;
 double   d_ratio = 0.5;
-uint64_t d_mult = 1000;
-uint64_t d_iratio;
-uint64_t d_long_iter;
+uint64_t d_mult = 10;
+uint64_t d_iratio = 5;
+uint64_t d_long_iter = 970;
 double d_mu = 1;
-double d_sigma = 10;
-uint64_t target_iter = 0;
+double d_sigma = 10; 
+uint64_t target_iter = 1;
 
 static inline uint64_t latency_distribution()
 {
@@ -77,7 +77,7 @@ static inline uint64_t latency_distribution()
                 else
                         return target_iter;
         case D_LOGNORMAL:
-                return (uint64_t) (gsl_ran_lognormal(rnd, d_mu, d_sigma) * target_iter);
+                return (uint64_t) (gsl_ran_lognormal(rnd, d_mu, d_sigma) * (double) target_iter);
         case D_EXP:
                 return (uint64_t) (gsl_ran_exponential(rnd, d_mu) * target_iter);
         case D_CONSTANT:
@@ -122,13 +122,15 @@ void do_networking(void)
                         void * req;
                         int ret = request_alloc(&req);
                         if (ret) {
-                                // TODO: Handle failure to allocate request.
+				log_err("Failure to allocate request\n");
                                 continue;
                         }
                         ++num_recv;
                         ((request_t *)req)->req_id = req_id++;
                         ((request_t *)req)->qtime = next_request;
-                        ((request_t *)req)->num_iter = latency_distribution();
+			uint64_t num_iter = latency_distribution();
+                        //log_info("num_iter: %lu\n", num_iter);
+			((request_t *)req)->num_iter = num_iter;
                         // Send the current request to the dispatcher.
                         networker_pointers.pkts[i] = req;
                         // This should be unnecessary now.
