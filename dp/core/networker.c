@@ -56,7 +56,7 @@ gsl_rng * rnd;
 double lambda = 1.0 / TARGET_QPS;
 
 /* Work distribution parameters */
-enum {D_CONSTANT, D_LOGNORMAL, D_BIMODAL, D_EXP};
+enum {D_CONSTANT, D_LOGNORMAL, D_BIMODAL, D_EXP, D_DYNAMIC};
 
 int distribution = D_BIMODAL;
 double   d_ratio = 0.5;
@@ -82,6 +82,17 @@ static inline uint64_t latency_distribution()
                 return (uint64_t) (gsl_ran_exponential(rnd, d_mu) * target_iter);
         case D_CONSTANT:
                 return target_iter;
+        case D_DYNAMIC:
+                uint64_t value = rand() % 1000;
+                uint64_t val = rand() % 1000;
+                if (val < 500)
+                        return (uint64_t) (gsl_ran_exponential(rnd, d_mu) * target_iter);
+                else {
+                        if (value < d_iratio)
+                                return d_long_iter;
+                        else
+                                return target_iter;
+                }
         default:
                 panic("Unsupported distribution\n");
         }
