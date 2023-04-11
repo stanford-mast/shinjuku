@@ -1,5 +1,6 @@
 #!/bin/sh
-
+set -x
+set -e 
 # Remove kernel modules
 rmmod pcidma
 rmmod dune

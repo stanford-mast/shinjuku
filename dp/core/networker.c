@@ -67,7 +67,7 @@ double d_mu = 1;
 double d_sigma = 10; 
 uint64_t target_iter = 1;
 
-static inline uint64_t latency_distribution()
+static inline uint64_t latency_distribution(uint64_t req_id)
 {
         switch (distribution) {
         case D_BIMODAL:;
@@ -85,8 +85,9 @@ static inline uint64_t latency_distribution()
         case D_DYNAMIC:
                 uint64_t value = rand() % 1000;
                 uint64_t val = rand() % 1000;
-                if (val < 500)
+                if (req_id < NUM_REQUESTS / 2) {
                         return (uint64_t) (gsl_ran_exponential(rnd, d_mu) * target_iter);
+                }
                 else {
                         if (value < d_iratio)
                                 return d_long_iter;
@@ -139,7 +140,7 @@ void do_networking(void)
                         ++num_recv;
                         ((request_t *)req)->req_id = req_id++;
                         ((request_t *)req)->qtime = next_request;
-			uint64_t num_iter = latency_distribution();
+			uint64_t num_iter = latency_distribution(req_id);
                         //log_info("num_iter: %lu\n", num_iter);
 			((request_t *)req)->num_iter = num_iter;
                         // Send the current request to the dispatcher.
